@@ -3,8 +3,6 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -18,25 +16,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Camera, ChevronLeft } from 'lucide-react';
-import { updateUserProfile } from '@/app/auth/actions';
-import { auth } from '@/lib/firebase';
+import { auth, storage, db } from '@/lib/firebase';
+import { updateProfile } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, setDoc } from 'firebase/firestore';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? 'Saving...' : 'Save Changes'}
-    </Button>
-  );
-}
-
 export function SettingsPage() {
-  const [state, formAction] = useActionState(updateUserProfile, null);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -52,15 +43,6 @@ export function SettingsPage() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (state?.success) {
-      toast({ title: 'Success', description: state.message });
-    } else if (state?.message) {
-      toast({ title: 'Error', description: state.message, variant: 'destructive' });
-    }
-  }, [state, toast]);
-
-
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -69,7 +51,7 @@ export function SettingsPage() {
   };
 
   const triggerFileSelect = () => fileInputRef.current?.click();
-  
+
   const getInitials = (name?: string | null) => {
     if (!name) return 'U';
     const names = name.split(' ');
@@ -77,6 +59,49 @@ export function SettingsPage() {
       return `${names[0][0]}${names[names.length - 1][0]}`;
     }
     return name[0];
+  };
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!user) {
+      toast({ title: 'Error', description: "You must be logged in to update your profile.", variant: 'destructive' });
+      return;
+    }
+
+    setIsSaving(true);
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get('name') as string;
+    const profilePicture = formData.get('profilePicture') as File;
+
+    if (!name || name.length < 2) {
+      toast({ title: 'Error', description: "Name must be at least 2 characters.", variant: 'destructive' });
+      setIsSaving(false);
+      return;
+    }
+    
+    try {
+      let photoURL = user.photoURL;
+      if (profilePicture && profilePicture.size > 0) {
+        const storageRef = ref(storage, `profilePictures/${user.uid}`);
+        await uploadBytes(storageRef, profilePicture);
+        photoURL = await getDownloadURL(storageRef);
+      }
+      
+      await updateProfile(user, { displayName: name, photoURL });
+
+      await setDoc(doc(db, "users", user.uid), {
+        displayName: name,
+        photoURL: photoURL,
+      }, { merge: true });
+
+      toast({ title: 'Success', description: "Profile updated successfully!" });
+
+    } catch (error: any) {
+      toast({ title: 'Error', description: "An unexpected error occurred. Please try again.", variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (loading) {
@@ -102,7 +127,7 @@ export function SettingsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="space-y-6">
+        <form onSubmit={handleSave} className="space-y-6">
           <div className="flex justify-center">
             <div className="relative">
               <Avatar
@@ -138,15 +163,14 @@ export function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               The AI will use this name to address you.
             </p>
-             {state?.errors?.name && (
-              <p className="text-xs text-destructive">{state.errors.name[0]}</p>
-            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" defaultValue={user?.email || ''} disabled />
           </div>
-          <SubmitButton />
+          <Button type="submit" className="w-full" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
         </form>
       </CardContent>
        <CardFooter className="justify-center">

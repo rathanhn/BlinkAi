@@ -1,13 +1,12 @@
 
 'use server';
 
-import { auth, storage, db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   updateProfile,
   signOut,
 } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -16,10 +15,6 @@ const signupTextSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Please enter a valid email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
-});
-
-const profileUpdateSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters.'),
 });
 
 export async function signupWithEmail(prevState: any, formData: FormData) {
@@ -62,40 +57,4 @@ export async function signupWithEmail(prevState: any, formData: FormData) {
 export async function logout() {
   await signOut(auth);
   redirect('/login');
-}
-
-export async function updateUserProfile(prevState: any, formData: FormData) {
-  const user = auth.currentUser;
-  if (!user) {
-    return { success: false, message: "You must be logged in to update your profile." };
-  }
-
-  const name = formData.get('name') as string;
-  const profilePicture = formData.get('profilePicture') as File;
-
-  const parsed = profileUpdateSchema.safeParse({ name });
-  if (!parsed.success) {
-    return { success: false, errors: parsed.error.flatten().fieldErrors };
-  }
-
-  try {
-    let photoURL = user.photoURL;
-    if (profilePicture && profilePicture.size > 0) {
-      const storageRef = ref(storage, `profilePictures/${user.uid}`);
-      await uploadBytes(storageRef, profilePicture);
-      photoURL = await getDownloadURL(storageRef);
-    }
-    
-    await updateProfile(user, { displayName: name, photoURL });
-
-    await setDoc(doc(db, "users", user.uid), {
-      displayName: name,
-      photoURL: photoURL,
-    }, { merge: true });
-
-    return { success: true, message: "Profile updated successfully!" };
-
-  } catch (error: any) {
-    return { success: false, message: "An unexpected error occurred. Please try again." };
-  }
 }
