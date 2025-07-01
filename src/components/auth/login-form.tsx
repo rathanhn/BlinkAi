@@ -2,8 +2,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -15,35 +15,63 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo, GoogleIcon } from '@/components/icons';
-import { loginWithEmail, signInWithGoogle } from '@/app/auth/actions';
+import { auth, db } from '@/lib/firebase';
+import { 
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? 'Signing In...' : 'Sign In'}
-    </Button>
-  );
-}
-
-function GoogleButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="w-full"
-      onClick={() => signInWithGoogle()}
-      disabled={pending}
-    >
-      <GoogleIcon className="mr-2 h-4 w-4" />
-      Sign in with Google
-    </Button>
-  );
-}
 
 export function LoginForm() {
-  const [state, formAction] = useActionState(loginWithEmail, null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push('/chat');
+    } catch (error: any) {
+      console.error("Login Client Error:", error.code, error.message);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        setError("Invalid email or password. Please try again.");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+      setLoading(false);
+    }
+  };
+  
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      await setDoc(doc(db, "users", user.uid), {
+        uid: user.uid,
+        displayName: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+      }, { merge: true });
+
+      router.push('/chat');
+    } catch (error: any) {
+      console.error("Google sign-in error", error);
+      setError(error.message);
+      setLoading(false);
+    }
+  };
 
   return (
     <Card className="w-full max-w-sm">
@@ -57,25 +85,21 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" placeholder="m@example.com" required />
-            {state?.errors?.email && (
-              <p className="text-xs text-destructive">{state.errors.email[0]}</p>
-            )}
+            <Input id="email" name="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" required />
-            {state?.errors?.password && (
-               <p className="text-xs text-destructive">{state.errors.password[0]}</p>
-            )}
+            <Input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
-          {state?.message && (
-            <p className="text-sm text-destructive text-center">{state.message}</p>
+          {error && (
+            <p className="text-sm text-destructive text-center">{error}</p>
           )}
-          <SubmitButton />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Signing In...' : 'Sign In'}
+          </Button>
         </form>
          <div className="relative my-4">
           <div className="absolute inset-0 flex items-center">
@@ -87,7 +111,16 @@ export function LoginForm() {
             </span>
           </div>
         </div>
-        <GoogleButton />
+        <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+        >
+            <GoogleIcon className="mr-2 h-4 w-4" />
+            Sign in with Google
+        </Button>
         <div className="mt-4 text-center text-sm">
           Don&apos;t have an account?{' '}
           <Link href="/signup" className="underline">

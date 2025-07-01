@@ -4,11 +4,8 @@
 import { auth, storage, db } from '@/lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
   updateProfile,
   signOut,
-  GoogleAuthProvider,
-  signInWithPopup
 } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
@@ -19,11 +16,6 @@ const signupTextSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Please enter a valid email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
-});
-
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1, 'Password is required.'),
 });
 
 const profileUpdateSchema = z.object({
@@ -64,49 +56,6 @@ export async function signupWithEmail(prevState: any, formData: FormData) {
     return { success: false, message: "An unexpected error occurred. Please try again." };
   }
 
-  redirect('/chat');
-}
-
-export async function loginWithEmail(prevState: any, formData: FormData) {
-  const data = Object.fromEntries(formData);
-  const parsed = loginSchema.safeParse(data);
-
-  if (!parsed.success) {
-    return { success: false, errors: parsed.error.flatten().fieldErrors };
-  }
-
-  const { email, password } = parsed.data;
-
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    console.log(`Sign-in successful on server for user: ${userCredential.user.email}`);
-  } catch (error: any) {
-    console.error("Login Server Error:", error.code, error.message);
-    if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        return { success: false, message: "Invalid email or password. Please try again." };
-    }
-    return { success: false, message: "An unexpected error occurred. Please try again." };
-  }
-  
-  redirect('/chat');
-}
-
-export async function signInWithGoogle() {
-  const provider = new GoogleAuthProvider();
-  try {
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    await setDoc(doc(db, "users", user.uid), {
-      uid: user.uid,
-      displayName: user.displayName,
-      email: user.email,
-      photoURL: user.photoURL,
-    }, { merge: true });
-
-  } catch (error: any) {
-    console.error("Google sign-in error", error);
-    return { success: false, message: error.message };
-  }
   redirect('/chat');
 }
 
