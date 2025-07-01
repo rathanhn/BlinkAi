@@ -39,7 +39,7 @@ export function LandingPage() {
           </div>
           <div className="mt-16 max-w-5xl mx-auto">
             <div className="relative rounded-xl shadow-2xl overflow-hidden border border-border bg-card">
-              <div className="p-8 h-[500px] flex flex-col gap-6 bg-card/50">
+              <div className="p-8 h-[500px] flex flex-col gap-4 bg-card/50">
                 <div className="flex items-start gap-4 justify-end">
                   <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-gradient-to-br from-purple-600 to-blue-500 text-primary-foreground">
                     <p className="text-sm">Can you help me brainstorm ideas for a new project?</p>
@@ -55,6 +55,24 @@ export function LandingPage() {
                   <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-background">
                     <p className="text-sm">
                       Absolutely! I&apos;m bubbling with ideas. How about a smart toaster that also gives you witty life advice? Or we could go bigger... an app that translates cat meows into Shakespearean English?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4 justify-end">
+                  <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-gradient-to-br from-purple-600 to-blue-500 text-primary-foreground">
+                    <p className="text-sm">Haha, the cat translator sounds amazing. Let&apos;s go with that! How would we start?</p>
+                  </div>
+                   <div className="w-8 h-8 border shadow-sm rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <User className="w-5 h-5" />
+                    </div>
+                </div>
+                <div className="flex items-start gap-4">
+                   <div className="w-8 h-8 border shadow-sm rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                  <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-background">
+                    <p className="text-sm">
+                      Excellent choice! First, we&apos;ll need a catchy name. &apos;Meowthlet&apos; or &apos;The Feline Bard&apos;? Then, we&apos;ll outline the core features, like a &apos;Purr-to-Sonnet&apos; converter. I&apos;m already drafting up some initial concepts...
                     </p>
                     <div className="flex items-center gap-2 mt-3">
                       <span className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse delay-75" />
