@@ -80,6 +80,7 @@ export function SettingsPage() {
       let newPhotoURL = user.photoURL;
 
       if (imageFile) {
+        // Convert the image to a Base64 string to store in Firestore/Auth
         newPhotoURL = await toBase64(imageFile);
       }
       
