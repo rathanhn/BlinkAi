@@ -14,7 +14,7 @@ export function LandingPage() {
         </Link>
         <nav className="flex items-center gap-4">
           <Button variant="ghost" asChild>
-            <Link href="/chat">Sign In</Link>
+            <Link href="/login">Sign In</Link>
           </Button>
           <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
             <Link href="/chat">Get Started</Link>
