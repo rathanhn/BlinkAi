@@ -11,9 +11,11 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarTrigger,
+  SidebarSeparator,
+  SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
-import { Home, Plus, User as UserIcon, LogOut } from 'lucide-react';
+import { Home, Plus, Settings, Trash2, MessageSquare, LogOut } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -31,23 +33,51 @@ import {
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { logout } from '@/app/auth/actions';
+import { getConversations, startNewConversation } from '@/app/chat/actions';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
-export function ChatLayout() {
-  const [chatKey, setChatKey] = useState<number | null>(null);
+interface Conversation {
+  id: string;
+  title: string;
+}
+
+export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
-      setChatKey(Date.now()); // Reset chat on auth change
+      setLoadingAuth(false);
+      if (currentUser) {
+        setLoadingConversations(true);
+        const convos = await getConversations(currentUser.uid);
+        setConversations(convos);
+        setLoadingConversations(false);
+      } else {
+        setConversations([]);
+        setLoadingConversations(false);
+      }
     });
     return () => unsubscribe();
   }, []);
 
-  const startNewChat = () => {
-    setChatKey(Date.now());
+  const handleNewChat = async () => {
+    if (!user) {
+      toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const newConversationId = await startNewConversation(user.uid);
+      router.push(`/chat/${newConversationId}`);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Could not start a new chat.', variant: 'destructive' });
+    }
   };
   
   const getInitials = (name?: string | null) => {
@@ -59,8 +89,7 @@ export function ChatLayout() {
     return name[0];
   };
 
-
-  if (loading) {
+  if (loadingAuth) {
     return (
        <div className="flex items-center justify-center min-h-screen bg-background">
           <div className="flex items-center gap-2">
@@ -94,9 +123,12 @@ export function ChatLayout() {
                     <DropdownMenuContent align="end">
                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
                        <DropdownMenuSeparator />
-                       <DropdownMenuItem disabled>{user.displayName || 'User'}</DropdownMenuItem>
-                       <DropdownMenuItem disabled className="text-xs text-muted-foreground -mt-2">{user.email}</DropdownMenuItem>
-                       <DropdownMenuSeparator />
+                       <DropdownMenuItem asChild>
+                        <Link href="/settings">
+                          <Settings className="mr-2 h-4 w-4" />
+                          <span>Settings</span>
+                        </Link>
+                       </DropdownMenuItem>
                        <DropdownMenuItem onClick={() => logout()}>
                          <LogOut className="mr-2 h-4 w-4" />
                          <span>Log out</span>
@@ -109,19 +141,30 @@ export function ChatLayout() {
           <SidebarContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={startNewChat} className="w-full">
+                <SidebarMenuButton onClick={handleNewChat} className="w-full">
                   <Plus className="mr-2" />
                   New Chat
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild className="w-full">
-                  <Link href="/">
-                    <Home className="mr-2" />
-                    Home
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <SidebarSeparator />
+              {loadingConversations ? (
+                 <div className="p-2 space-y-2">
+                    <SidebarMenuSkeleton showIcon />
+                    <SidebarMenuSkeleton showIcon />
+                    <SidebarMenuSkeleton showIcon />
+                 </div>
+              ) : (
+                conversations.map(convo => (
+                  <SidebarMenuItem key={convo.id}>
+                    <SidebarMenuButton asChild className="w-full" isActive={conversationId === convo.id}>
+                      <Link href={`/chat/${convo.id}`}>
+                        <MessageSquare className="mr-2" />
+                        <span className="truncate">{convo.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
+              )}
             </SidebarMenu>
           </SidebarContent>
         </Sidebar>
@@ -147,9 +190,12 @@ export function ChatLayout() {
                     <DropdownMenuContent align="end">
                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
                        <DropdownMenuSeparator />
-                       <DropdownMenuItem disabled>{user.displayName || 'User'}</DropdownMenuItem>
-                       <DropdownMenuItem disabled className="text-xs text-muted-foreground -mt-2">{user.email}</DropdownMenuItem>
-                       <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href="/settings">
+                            <Settings className="mr-2 h-4 w-4" />
+                            <span>Settings</span>
+                          </Link>
+                        </DropdownMenuItem>
                        <DropdownMenuItem onClick={() => logout()}>
                          <LogOut className="mr-2 h-4 w-4" />
                          <span>Log out</span>
@@ -158,7 +204,15 @@ export function ChatLayout() {
                   </DropdownMenu>
                 )}
             </header>
-            {chatKey && <Chat key={chatKey} />}
+            {conversationId ? (
+              <Chat conversationId={conversationId} user={user} />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <Logo className="w-20 h-20 text-primary mb-4" />
+                <h2 className="text-2xl font-semibold">Welcome to BlinkAi</h2>
+                <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
+              </div>
+            )}
         </SidebarInset>
       </div>
     </SidebarProvider>
