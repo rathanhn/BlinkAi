@@ -2,27 +2,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow users to read and write their own user document.
+    // Users can read/write their own document in the 'users' collection
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Rules for the 'conversations' collection
     match /conversations/{conversationId} {
-      // Allow a user to read a conversation if they are the owner.
-      // This single 'read' rule covers both 'get' (for a single chat) and 'list' (for queries).
+      // Allow a user to read a conversation (get or list) if they are the owner.
+      // This rule works for queries like where('userId', '==', auth.uid).
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // Allow a user to create a conversation if the new document's userId matches their own.
+
+      // Allow a user to create a conversation if they are logged in and
+      // the new document's userId is their own.
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
 
-      // Allow a user to update a conversation (e.g., the title or lastUpdated timestamp) if they are the owner.
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
+      // Allow a user to update or delete their own conversation.
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
 
-    match /conversations/{conversationId}/messages/{messageId} {
-      // Allow read/write of messages if the user owns the parent conversation.
-      // The get() function reads the parent conversation document to check for ownership.
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+      // Rules for the 'messages' subcollection
+      match /messages/{messageId} {
+        // Allow read/write access to messages if the user owns the parent conversation.
+        allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+      }
     }
   }
 }
