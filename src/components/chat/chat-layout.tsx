@@ -47,7 +47,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { TooltipProvider } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
@@ -248,18 +248,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 <h1 className="text-xl font-semibold">BlinkAi</h1>
               </Link>
               <div className="flex items-center gap-1">
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button asChild variant={isTempChat ? "secondary" : "ghost"} size="icon" className="h-8 w-8">
-                            <Link href="/chat">
-                                <FlaskConical className="h-4 w-4" />
-                            </Link>
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                        <p>Temporary Chat</p>
-                    </TooltipContent>
-                </Tooltip>
                 {user && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -270,7 +258,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                          </Avatar>
                        </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-48">
                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
                        <DropdownMenuSeparator />
                        <DropdownMenuItem asChild>
@@ -293,6 +281,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <div className="flex flex-col gap-2 p-2">
+                    <SidebarMenuButton asChild variant={isTempChat ? "secondary" : "default"} className="w-full">
+                        <Link href="/chat">
+                            <FlaskConical className="mr-2" />
+                            Temporary Chat
+                        </Link>
+                    </SidebarMenuButton>
                     <SidebarMenuButton onClick={handleNewChat} className="w-full">
                       <Plus className="mr-2" />
                       New Chat
@@ -349,7 +343,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                          </Avatar>
                        </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-48">
                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
                        <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
