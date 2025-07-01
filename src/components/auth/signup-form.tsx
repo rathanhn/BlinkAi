@@ -3,7 +3,7 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -29,7 +29,7 @@ function SubmitButton() {
 }
 
 export function SignupForm() {
-  const [state, formAction] = useFormState(signupWithEmail, null);
+  const [state, formAction] = useActionState(signupWithEmail, null);
   const [password, setPassword] = useState('');
   const [strength, setStrength] = useState({
     value: 0,

@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -42,7 +42,7 @@ function GoogleButton() {
 }
 
 export function LoginForm() {
-  const [state, formAction] = useFormState(loginWithEmail, null);
+  const [state, formAction] = useActionState(loginWithEmail, null);
 
   return (
     <Card className="w-full max-w-sm">
