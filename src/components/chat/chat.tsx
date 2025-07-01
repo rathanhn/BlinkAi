@@ -1,4 +1,3 @@
-
 "use client";
 
 import { addMessage, getMessages, updateMessageReaction, updateConversationTitle } from "@/lib/chat-service";
@@ -78,7 +77,7 @@ export function Chat({
       role: "user",
       content: userInput,
       timestamp: new Date(),
-      ...(replyingTo && { replyTo: replyingTo.id }),
+      ...(replyingTo && { replyTo: replyTo.id }),
     };
 
     setMessages((prev) => [...prev, newUserMessage]);
@@ -111,6 +110,7 @@ export function Chat({
           throw new Error('Failed to get AI response');
         }
       } catch (error) {
+        console.error("Failed to send message:", error);
         toast({
           variant: "destructive",
           title: "Error",
