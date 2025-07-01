@@ -68,7 +68,6 @@ const SidebarProvider = React.forwardRef<
     },
     ref
   ) => {
-    const [mounted, setMounted] = React.useState(false)
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
 
@@ -90,12 +89,6 @@ const SidebarProvider = React.forwardRef<
     )
 
     React.useEffect(() => {
-      setMounted(true)
-    }, [])
-
-    React.useEffect(() => {
-      if (!mounted) return
-
       const cookieValue = document.cookie
         .split("; ")
         .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
@@ -109,8 +102,7 @@ const SidebarProvider = React.forwardRef<
           _setOpen(cookieOpen)
         }
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mounted, setOpenProp])
+    }, [setOpenProp])
 
     const toggleSidebar = React.useCallback(() => {
       return isMobile
