@@ -22,7 +22,7 @@ export function Chat() {
     {
       id: "init",
       role: "assistant",
-      content: "Hello! I'm BlinkAi, your personal AI agent developed by Rathan H N. How can I help you solve your problems today?",
+      content: "Hello! I'm BlinkAi, your personal AI agent. How can I help you solve your problems today?",
     },
   ]);
   const [input, setInput] = useState("");
