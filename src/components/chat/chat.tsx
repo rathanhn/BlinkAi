@@ -271,7 +271,7 @@ export function Chat({
                     <Logo className="w-5 h-5" />
                   </AvatarFallback>
                 </Avatar>
-                <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-card">
+                <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-card/80">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse delay-75" />
                     <span className="h-2 w-2 bg-muted-foreground rounded-full animate-pulse delay-150" />
@@ -284,14 +284,19 @@ export function Chat({
           </div>
         </ScrollArea>
       </div>
-      <div className="p-4 border-t bg-card">
+      <div className={cn(
+          "p-4 border-t bg-card",
+          isPending && "bg-transparent border-transparent"
+        )}>
         <AnimatePresence>
         {replyingTo && (
             <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="text-sm bg-secondary p-2 rounded-t-md flex justify-between items-center"
+                className={cn("text-sm bg-secondary p-2 rounded-t-md flex justify-between items-center",
+                    isPending && "bg-transparent"
+                )}
             >
                 <div>
                   <p className="font-semibold text-secondary-foreground">Replying to {replyingTo.role === 'user' ? user.displayName : 'BlinkAi'}</p>
@@ -307,7 +312,10 @@ export function Chat({
           <Textarea
             ref={textareaRef}
             placeholder={conversationId ? "Type your message..." : "Temporary chat. History will not be saved."}
-            className={cn("flex-1 resize-none min-h-[40px] max-h-48", replyingTo && "rounded-t-none")}
+            className={cn("flex-1 resize-none min-h-[40px] max-h-48",
+              replyingTo && "rounded-t-none",
+              isPending && "bg-background/50 placeholder:text-foreground/80"
+            )}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
