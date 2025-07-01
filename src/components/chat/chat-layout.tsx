@@ -15,7 +15,7 @@ import {
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
-import { Plus, Settings, MessageSquare, LogOut } from 'lucide-react';
+import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, Ghost } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -30,17 +30,33 @@ import {
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { logout } from '@/app/auth/actions';
-import { getConversations, startNewConversation, type Conversation, Timestamp } from '@/lib/chat-service';
+import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [isTempChat, setIsTempChat] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -65,22 +81,19 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     if (user) {
       setLoadingConversations(true);
-      getConversations(user.uid)
-        .then(convos => {
-            // Firestore timestamps need to be converted to JS Dates for serialization
-            const serializableConvos = convos.map(c => ({
-                ...c,
-                lastUpdated: (c.lastUpdated as Timestamp).toDate(),
-            }));
-            setConversations(serializableConvos as any);
-        })
-        .catch(err => {
-            console.error("Error fetching conversations:", err);
-            toast({ title: 'Error', description: 'Could not fetch conversations.', variant: 'destructive' });
-        })
-        .finally(() => {
-            setLoadingConversations(false);
-        });
+      Promise.all([
+        getConversations(user.uid),
+        getArchivedConversations(user.uid)
+      ]).then(([activeConvos, archivedConvos]) => {
+          const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
+          setActiveConversations(activeConvos.map(serialize) as any);
+          setArchivedConversations(archivedConvos.map(serialize) as any);
+      }).catch(err => {
+          console.error("Error fetching conversations:", err);
+          toast({ title: 'Error', description: 'Could not fetch conversations.', variant: 'destructive' });
+      }).finally(() => {
+          setLoadingConversations(false);
+      });
     }
   }, [user, toast]);
 
@@ -90,14 +103,17 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
       return;
     }
+    if (isTempChat) {
+      router.push('/chat');
+      return;
+    }
     try {
       const newConversation = await startNewConversation(user.uid);
-      // The new conversation from firestore needs its timestamp converted
       const serializableConvo = {
           ...newConversation,
           lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
       };
-      setConversations(prev => [serializableConvo as any, ...prev]);
+      setActiveConversations(prev => [serializableConvo as any, ...prev]);
       router.push(`/chat/${newConversation.id}`);
     } catch (error) {
       console.error(error);
@@ -105,10 +121,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     }
   };
 
-  const handleTitleUpdate = (conversationId: string, newTitle: string) => {
-    setConversations(prev => 
-        prev.map(c => c.id === conversationId ? { ...c, title: newTitle } : c)
-    );
+  const handleTitleUpdate = (convoId: string, newTitle: string) => {
+    const updater = (conversations: Conversation[]) => 
+        conversations.map(c => c.id === convoId ? { ...c, title: newTitle } : c);
+    setActiveConversations(updater);
+    setArchivedConversations(updater);
   };
   
   const getInitials = (name?: string | null) => {
@@ -124,8 +141,88 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     if (auth) {
         await signOut(auth);
     }
-    await logout(); // server action redirect
+    await logout();
   };
+
+  const handleDelete = async (convoId: string) => {
+    try {
+        await deleteConversation(convoId);
+        setActiveConversations(prev => prev.filter(c => c.id !== convoId));
+        setArchivedConversations(prev => prev.filter(c => c.id !== convoId));
+        toast({ title: "Conversation Deleted" });
+        if (conversationId === convoId) {
+            router.push('/chat');
+        }
+    } catch (error) {
+        console.error("Error deleting conversation:", error);
+        toast({ title: 'Error', description: 'Could not delete conversation.', variant: 'destructive' });
+    }
+  };
+
+  const handleArchiveToggle = async (convo: Conversation, shouldArchive: boolean) => {
+      try {
+          await archiveConversation(convo.id, shouldArchive);
+          if (shouldArchive) {
+              setActiveConversations(prev => prev.filter(c => c.id !== convo.id));
+              setArchivedConversations(prev => [{...convo, archived: true }, ...prev].sort((a,b) => b.lastUpdated.getTime() - a.lastUpdated.getTime()));
+              toast({ title: "Conversation Archived" });
+          } else {
+              setArchivedConversations(prev => prev.filter(c => c.id !== convo.id));
+              setActiveConversations(prev => [{...convo, archived: false }, ...prev].sort((a,b) => b.lastUpdated.getTime() - a.lastUpdated.getTime()));
+              toast({ title: "Conversation Restored" });
+          }
+      } catch (error) {
+          console.error("Error updating conversation:", error);
+          toast({ title: 'Error', description: 'Could not update conversation status.', variant: 'destructive' });
+      }
+  };
+
+  const renderConversation = (convo: Conversation) => (
+      <SidebarMenuItem key={convo.id} className="relative group/item">
+          <SidebarMenuButton asChild className="w-full pr-8" isActive={conversationId === convo.id}>
+              <Link href={`/chat/${convo.id}`}>
+                  <MessageSquare className="mr-2" />
+                  <span className="truncate">{convo.title}</span>
+              </Link>
+          </SidebarMenuButton>
+          <div className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <MoreVertical className="h-4 w-4" />
+                      </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => handleArchiveToggle(convo, !convo.archived)}>
+                          {convo.archived ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
+                          <span>{convo.archived ? 'Restore' : 'Archive'}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Delete</span>
+                              </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                              <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                      This will permanently delete this conversation and all its messages. This action cannot be undone.
+                                  </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(convo.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                          </AlertDialogContent>
+                      </AlertDialog>
+                  </DropdownMenuContent>
+              </DropdownMenu>
+          </div>
+      </SidebarMenuItem>
+  );
 
   if (loadingAuth) {
     return (
@@ -179,10 +276,19 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           <SidebarContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleNewChat} className="w-full">
-                  <Plus className="mr-2" />
-                  New Chat
-                </SidebarMenuButton>
+                <div className="flex flex-col gap-2 p-2">
+                    <SidebarMenuButton onClick={handleNewChat} className="w-full">
+                      <Plus className="mr-2" />
+                      New Chat
+                    </SidebarMenuButton>
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <Switch id="temp-chat" checked={isTempChat} onCheckedChange={setIsTempChat} />
+                      <Label htmlFor="temp-chat" className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                        <Ghost className="h-4 w-4"/>
+                        Temporary Chat
+                      </Label>
+                    </div>
+                </div>
               </SidebarMenuItem>
               <SidebarSeparator />
               {loadingConversations ? (
@@ -192,16 +298,23 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                     <SidebarMenuSkeleton showIcon />
                  </div>
               ) : (
-                conversations.map(convo => (
-                  <SidebarMenuItem key={convo.id}>
-                    <SidebarMenuButton asChild className="w-full" isActive={conversationId === convo.id}>
-                      <Link href={`/chat/${convo.id}`}>
-                        <MessageSquare className="mr-2" />
-                        <span className="truncate">{convo.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))
+                <>
+                  {activeConversations.map(renderConversation)}
+                  {archivedConversations.length > 0 && (
+                    <Accordion type="single" collapsible className="w-full px-2">
+                      <AccordionItem value="archived" className="border-none">
+                        <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline">
+                          Archived ({archivedConversations.length})
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-0">
+                          <div className="space-y-1">
+                           {archivedConversations.map(renderConversation)}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                </>
               )}
             </SidebarMenu>
           </SidebarContent>
@@ -242,8 +355,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                   </DropdownMenu>
                 )}
             </header>
-            {conversationId && user ? (
-              <Chat conversationId={conversationId} user={user} onTitleUpdate={handleTitleUpdate} />
+            {user ? (
+              <Chat 
+                conversationId={conversationId} 
+                user={user} 
+                onTitleUpdate={handleTitleUpdate} 
+              />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <Logo className="w-20 h-20 text-primary mb-4" />

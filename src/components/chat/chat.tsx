@@ -29,7 +29,7 @@ export function Chat({
   user, 
   onTitleUpdate 
 }: { 
-  conversationId: string; 
+  conversationId?: string; 
   user: FirebaseUser;
   onTitleUpdate: (id: string, title: string) => void;
 }) {
@@ -48,7 +48,11 @@ export function Chat({
   };
 
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId) {
+        setMessages([]);
+        setLoading(false);
+        return;
+    }
     setLoading(true);
     getMessages(conversationId)
         .then((history) => {
@@ -91,7 +95,6 @@ export function Chat({
       ...(replyingTo && { replyTo: replyingTo.id }),
     };
     
-    // Optimistic update for user message
     const tempUserMessage: Message = {
       ...(newUserMessage as Message),
       id: crypto.randomUUID(),
@@ -103,7 +106,9 @@ export function Chat({
     
     startTransition(async () => {
       try {
-        await addMessage(conversationId, newUserMessage);
+        if (conversationId) {
+            await addMessage(conversationId, newUserMessage);
+        }
 
         const aiResponse = await generateChatResponse({ userInput, personaInformation: `The user's name is ${user.displayName}.` });
 
@@ -112,12 +117,14 @@ export function Chat({
             role: "assistant",
             content: aiResponse.aiResponse,
           };
-          await addMessage(conversationId, aiMessage);
-          
-          if (isFirstMessage) {
-            const summary = await updateConversationTitle(conversationId, userInput);
-            if (summary) {
-              onTitleUpdate(conversationId, summary);
+          if (conversationId) {
+            await addMessage(conversationId, aiMessage);
+            
+            if (isFirstMessage) {
+              const summary = await updateConversationTitle(conversationId, userInput);
+              if (summary) {
+                onTitleUpdate(conversationId, summary);
+              }
             }
           }
            const tempAiMessage: Message = {
@@ -137,16 +144,14 @@ export function Chat({
           title: "Error",
           description: "Failed to send message. Please try again.",
         });
-        // Revert optimistic update
         setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessage.id));
       }
     });
   };
 
   const handleReaction = async (messageId: string, reaction: string) => {
-    if (!user) return;
+    if (!user || !conversationId) return;
     
-    // Optimistic update
     const newMessages = messages.map(msg => {
       if (msg.id === messageId) {
         const newReactions = { ...(msg.reactions || {}) };
@@ -162,12 +167,10 @@ export function Chat({
     });
     setMessages(newMessages);
 
-    // Persist change
     try {
       await updateMessageReaction(conversationId, messageId, reaction, user.uid);
     } catch(e) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save reaction.' });
-      // Revert optimistic update if API call fails
       getMessages(conversationId).then(history => {
           const serializableHistory = history.map(msg => ({
               ...msg,
@@ -296,7 +299,7 @@ export function Chat({
         <form id="chat-form" onSubmit={handleSubmit} className="flex items-center gap-4">
           <Textarea
             ref={textareaRef}
-            placeholder="Type your message..."
+            placeholder={conversationId ? "Type your message..." : "Temporary chat. History will not be saved."}
             className={cn("flex-1 resize-none min-h-[40px] max-h-48", replyingTo && "rounded-t-none")}
             value={input}
             onChange={(e) => setInput(e.target.value)}

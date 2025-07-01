@@ -1,3 +1,4 @@
+
 {
   "indexes": [
     {
@@ -6,6 +7,10 @@
       "fields": [
         {
           "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "archived",
           "order": "ASCENDING"
         },
         {

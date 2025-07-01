@@ -9,9 +9,11 @@ import {
   orderBy,
   doc,
   updateDoc,
+  deleteDoc,
   serverTimestamp,
   Timestamp,
   getDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { summarizeConversation } from '@/ai/flows/summarize-conversation';
 
@@ -32,15 +34,35 @@ export interface Conversation {
   title: string;
   lastUpdated: Timestamp;
   userId: string;
+  archived?: boolean;
 }
 
-// Get all conversations for a user
+// Get all non-archived conversations for a user
 export async function getConversations(userId: string): Promise<Conversation[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const conversationsRef = collection(db, 'conversations');
-  const q = query(conversationsRef, where('userId', '==', userId), orderBy('lastUpdated', 'desc'));
+  const q = query(
+    conversationsRef, 
+    where('userId', '==', userId), 
+    where('archived', '==', false), 
+    orderBy('lastUpdated', 'desc')
+  );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
+}
+
+// Get all archived conversations for a user
+export async function getArchivedConversations(userId: string): Promise<Conversation[]> {
+    if (!db) throw new Error("Firestore is not initialized.");
+    const conversationsRef = collection(db, 'conversations');
+    const q = query(
+        conversationsRef,
+        where('userId', '==', userId),
+        where('archived', '==', true),
+        orderBy('lastUpdated', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
 }
 
 // Get all messages for a conversation
@@ -70,6 +92,7 @@ export async function startNewConversation(userId: string): Promise<Conversation
     title: 'New Chat',
     userId: userId,
     lastUpdated: serverTimestamp(),
+    archived: false,
   };
   const docRef = await addDoc(conversationsRef, newConversation);
   
@@ -114,4 +137,32 @@ export async function updateMessageReaction(conversationId: string, messageId: s
     
     await updateDoc(messageRef, { reactions });
   }
+}
+
+// Archive or unarchive a conversation
+export async function archiveConversation(conversationId: string, archive: boolean) {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const conversationRef = doc(db, 'conversations', conversationId);
+  await updateDoc(conversationRef, { archived: archive, lastUpdated: serverTimestamp() });
+}
+
+// Delete a conversation and all its messages
+export async function deleteConversation(conversationId: string) {
+    if (!db) throw new Error("Firestore is not initialized.");
+
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+
+    // Firestore doesn't support deleting subcollections from the client SDK directly.
+    // A batched write is used here to delete messages. For very large conversations,
+    // this could hit limits. A Cloud Function would be a more robust solution for production.
+    const messagesSnapshot = await getDocs(messagesRef);
+    const batch = writeBatch(db);
+    messagesSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
+
+    // Delete the conversation document itself
+    await deleteDoc(conversationRef);
 }
