@@ -1,7 +1,4 @@
-import { ChatLayout } from '@/components/chat/chat-layout';
-
-export default function ChatWelcomePage() {
-  // This page handles the base /chat route.
-  // It renders the layout without a specific conversation selected.
-  return <ChatLayout />;
-}
+// This file is not used.
+// The routing logic has been consolidated into /chat/[[...conversationId]]/page.tsx
+// to resolve a route conflict error.
+// It is intentionally left without a default export to prevent it from being registered as a route.

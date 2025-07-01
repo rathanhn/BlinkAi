@@ -1,3 +1,11 @@
-// This file caused routing conflicts and is no longer used.
-// The logic has been split into /chat/page.tsx and /chat/[conversationId]/page.tsx.
-// It is intentionally left without a default export to prevent it from being registered as a route.
+import { ChatLayout } from '@/components/chat/chat-layout';
+
+// This page handles both the base /chat route and /chat/[conversationId] routes.
+export default function ChatPage({ params }: { params: { conversationId?: string[] } }) {
+  // When the route is /chat, conversationId will be undefined.
+  // When the route is /chat/123, conversationId will be ['123']. We take the first element.
+  const conversationId = params.conversationId?.[0];
+  
+  // The key prop is important to force a re-render of the layout when changing conversations.
+  return <ChatLayout key={conversationId} conversationId={conversationId} />;
+}
