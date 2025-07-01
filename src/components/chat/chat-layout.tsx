@@ -15,7 +15,7 @@ import {
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
-import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore } from 'lucide-react';
+import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -47,6 +47,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { cn } from '@/lib/utils';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -56,6 +58,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
+
+  const isTempChat = !conversationId;
 
   useEffect(() => {
     if (!auth) {
@@ -230,6 +234,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   return (
     <SidebarProvider>
+    <TooltipProvider>
       <div className="flex min-h-screen w-full bg-background text-foreground">
         <Sidebar>
           <SidebarHeader>
@@ -238,6 +243,19 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 <Logo className="w-8 h-8 text-primary" />
                 <h1 className="text-xl font-semibold">BlinkAi</h1>
               </div>
+              <div className="flex items-center gap-1">
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button asChild variant={isTempChat ? "secondary" : "ghost"} size="icon" className="h-8 w-8">
+                            <Link href="/chat">
+                                <FlaskConical className="h-4 w-4" />
+                            </Link>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                        <p>Temporary Chat</p>
+                    </TooltipContent>
+                </Tooltip>
                 {user && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -264,6 +282,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
+              </div>
             </div>
           </SidebarHeader>
           <SidebarContent>
@@ -277,31 +296,33 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 </div>
               </SidebarMenuItem>
               <SidebarSeparator />
-              {loadingConversations ? (
-                 <div className="p-2 space-y-2">
-                    <SidebarMenuSkeleton showIcon />
-                    <SidebarMenuSkeleton showIcon />
-                    <SidebarMenuSkeleton showIcon />
-                 </div>
-              ) : (
-                <>
-                  {activeConversations.map(renderConversation)}
-                  {archivedConversations.length > 0 && (
-                    <Accordion type="single" collapsible className="w-full px-2">
-                      <AccordionItem value="archived" className="border-none">
-                        <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline">
-                          Archived ({archivedConversations.length})
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-0">
-                          <div className="space-y-1">
-                           {archivedConversations.map(renderConversation)}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  )}
-                </>
-              )}
+              <div className={cn("space-y-1", isTempChat && "opacity-50 pointer-events-none transition-opacity")}>
+                {loadingConversations ? (
+                   <div className="p-2 space-y-2">
+                      <SidebarMenuSkeleton showIcon />
+                      <SidebarMenuSkeleton showIcon />
+                      <SidebarMenuSkeleton showIcon />
+                   </div>
+                ) : (
+                  <>
+                    {activeConversations.map(renderConversation)}
+                    {archivedConversations.length > 0 && (
+                      <Accordion type="single" collapsible className="w-full px-2">
+                        <AccordionItem value="archived" className="border-none">
+                          <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline">
+                            Archived ({archivedConversations.length})
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-0">
+                            <div className="space-y-1">
+                             {archivedConversations.map(renderConversation)}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    )}
+                  </>
+                )}
+              </div>
             </SidebarMenu>
           </SidebarContent>
         </Sidebar>
@@ -358,6 +379,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             )}
         </SidebarInset>
       </div>
+    </TooltipProvider>
     </SidebarProvider>
   );
 }

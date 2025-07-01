@@ -1,13 +1,11 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, startNewConversation, type Conversation, Timestamp } from "@/lib/chat-service";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { SendHorizonal, User, ThumbsUp, ThumbsDown, Heart, MessageSquareQuote, X } from "lucide-react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
@@ -16,8 +14,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateChatResponse } from "@/ai/flows/generate-chat-response";
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from "@/components/icons";
-import { useRouter } from "next/navigation";
-
 
 interface Message {
   id: string;
@@ -32,7 +28,6 @@ export function Chat({
   conversationId, 
   user, 
   onTitleUpdate,
-  setActiveConversations,
 }: { 
   conversationId?: string; 
   user: FirebaseUser;
@@ -44,10 +39,9 @@ export function Chat({
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [isTempChat, setIsTempChat] = useState(!conversationId);
   const { toast } = useToast();
-  const router = useRouter();
 
+  const isTempChat = !conversationId;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -56,7 +50,6 @@ export function Chat({
   };
 
   useEffect(() => {
-    setIsTempChat(!conversationId);
     if (!conversationId) {
         setMessages([]);
         setLoading(false);
@@ -96,8 +89,8 @@ export function Chat({
     const userInput = input.trim();
     if (!userInput || isPending) return;
 
-    let currentConvoId = conversationId;
-    let isNewChat = false;
+    const currentConvoId = conversationId;
+    const wasNewChat = currentConvoId && messages.length === 0;
     
     // UI message for user
     const tempUserMessage: Message = {
@@ -113,23 +106,6 @@ export function Chat({
     
     startTransition(async () => {
       try {
-        // If starting a new permanent chat from the temporary chat view
-        if (!conversationId && !isTempChat) {
-          isNewChat = true;
-          const newConversation = await startNewConversation(user.uid);
-          if (newConversation) {
-              currentConvoId = newConversation.id;
-              const serializableConvo = {
-                  ...newConversation,
-                  lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
-              };
-              setActiveConversations(prev => [serializableConvo as any, ...prev]);
-              router.push(`/chat/${newConversation.id}`);
-          } else {
-              throw new Error("Failed to create a new conversation.");
-          }
-        }
-
         const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
           role: "user",
           content: userInput,
@@ -150,7 +126,7 @@ export function Chat({
           
           if (currentConvoId) {
             await addMessage(currentConvoId, aiMessage);
-            if (isNewChat) {
+            if (wasNewChat) {
               const summary = await updateConversationTitle(currentConvoId, userInput);
               if (summary) {
                 onTitleUpdate(currentConvoId, summary);
@@ -158,13 +134,13 @@ export function Chat({
             }
           }
 
-          // This logic now runs for both temp and permanent chats
+          // UI message for assistant
           const tempAiMessage: Message = {
             ...(aiMessage as Message),
             id: crypto.randomUUID(),
             timestamp: new Date(),
           }
-          // Replace temp user message and add AI response
+          // Replace temp user message and add AI response for a smooth feel
           setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, tempAiMessage]);
         } else {
           throw new Error('Failed to get AI response');
@@ -234,17 +210,6 @@ export function Chat({
         "flex flex-col h-full max-h-full",
         isPending && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
-      <div className="p-4 border-b bg-card flex justify-end items-center gap-2">
-          <Label htmlFor="temp-chat-toggle" className="text-sm text-muted-foreground">
-            Temporary Chat
-          </Label>
-          <Switch
-            id="temp-chat-toggle"
-            checked={isTempChat}
-            onCheckedChange={setIsTempChat}
-            disabled={!!conversationId || isPending}
-          />
-      </div>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 md:p-6 space-y-6">
@@ -351,7 +316,7 @@ export function Chat({
         <form id="chat-form" onSubmit={handleSubmit} className="flex items-center gap-4">
           <Textarea
             ref={textareaRef}
-            placeholder={isTempChat ? "Temporary chat. History will not be saved." : "Type your message..."}
+            placeholder={isTempChat ? "Temporary Chat. History is not saved." : "Type your message..."}
             className={cn("flex-1 resize-none min-h-[40px] max-h-48",
               replyingTo && "rounded-t-none",
               isPending && "bg-background/50 placeholder:text-foreground/80"
