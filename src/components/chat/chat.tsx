@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Bot, SendHorizonal, User, ThumbsUp, ThumbsDown, Heart, MessageSquareQuote, X } from "lucide-react";
+import { SendHorizonal, User, ThumbsUp, ThumbsDown, Heart, MessageSquareQuote, X } from "lucide-react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateChatResponse } from "@/ai/flows/generate-chat-response";
 import type { User as FirebaseUser } from 'firebase/auth';
+import { Logo } from "@/components/icons";
 
 
 interface Message {
@@ -192,7 +193,7 @@ export function Chat({
      return (
        <div className="flex items-center justify-center h-full">
          <div className="flex items-center gap-2">
-            <Bot className="w-8 h-8 text-primary animate-pulse" />
+            <Logo className="w-8 h-8 text-primary animate-pulse" />
             <h1 className="text-xl font-semibold">Loading messages...</h1>
           </div>
        </div>
@@ -201,8 +202,8 @@ export function Chat({
 
   return (
     <div className={cn(
-        "flex flex-col h-full max-h-full transition-all duration-500",
-        isPending && "bg-gradient-to-r from-purple-900/50 via-blue-900/50 to-purple-900/50 bg-200% animate-breathing-gradient"
+        "flex flex-col h-full max-h-full",
+        isPending && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
@@ -226,7 +227,7 @@ export function Chat({
                 {message.role === "assistant" && (
                   <Avatar className="w-8 h-8 border shadow-sm">
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      <Bot className="w-5 h-5" />
+                      <Logo className="w-5 h-5" />
                     </AvatarFallback>
                   </Avatar>
                 )}
@@ -267,7 +268,7 @@ export function Chat({
               <div className="flex items-start gap-4">
                 <Avatar className="w-8 h-8 border shadow-sm">
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    <Bot className="w-5 h-5" />
+                    <Logo className="w-5 h-5" />
                   </AvatarFallback>
                 </Avatar>
                 <div className="max-w-[75%] rounded-lg p-3 shadow-sm bg-card">
