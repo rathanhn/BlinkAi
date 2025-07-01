@@ -15,11 +15,15 @@ import {
 import { Logo } from '@/components/icons';
 import { Plus } from 'lucide-react';
 import { Chat } from './chat';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 
 export function ChatLayout() {
-  const [chatKey, setChatKey] = useState(Date.now());
+  const [chatKey, setChatKey] = useState<number | null>(null);
+
+  useEffect(() => {
+    setChatKey(Date.now());
+  }, []);
 
   const startNewChat = () => {
     setChatKey(Date.now());
@@ -56,7 +60,7 @@ export function ChatLayout() {
                 </SidebarTrigger>
                 <h1 className="flex-1 text-xl font-semibold">BlinkAi Chat</h1>
             </header>
-            <Chat key={chatKey} />
+            {chatKey && <Chat key={chatKey} />}
         </SidebarInset>
       </div>
     </SidebarProvider>
