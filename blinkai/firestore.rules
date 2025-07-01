@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can read and write their own user document.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /conversations/{conversationId} {
+      // Users can create conversations if they are logged in and the userId matches their own.
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+      // Users can read/list their own conversations by querying on their userId.
+      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow list: if request.auth != null && request.query.get('userId') == request.auth.uid;
+
+
+      // Users can update their own conversation's title and lastUpdated timestamp.
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    match /conversations/{conversationId}/messages/{messageId} {
+      // Allow users to read and write messages in conversations they own.
+      allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+    }
+  }
+}
