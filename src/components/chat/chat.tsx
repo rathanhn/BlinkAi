@@ -1,7 +1,7 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle } from "@/app/chat/actions";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle } from "@/lib/chat-service";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,7 +23,15 @@ interface Message {
   replyTo?: string;
 }
 
-export function Chat({ conversationId, user }: { conversationId: string; user: FirebaseUser | null }) {
+export function Chat({ 
+  conversationId, 
+  user, 
+  onTitleUpdate 
+}: { 
+  conversationId: string; 
+  user: FirebaseUser | null;
+  onTitleUpdate: (id: string, title: string) => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -62,6 +70,8 @@ export function Chat({ conversationId, user }: { conversationId: string; user: F
     e.preventDefault();
     const userInput = input.trim();
     if (!userInput || isPending || !user) return;
+    
+    const isFirstMessage = messages.length === 0;
 
     const newUserMessage: Message = {
       id: crypto.randomUUID(),
@@ -91,8 +101,11 @@ export function Chat({ conversationId, user }: { conversationId: string; user: F
           setMessages((prev) => [...prev, aiMessage]);
           await addMessage(user.uid, conversationId, aiMessage);
           
-          if (messages.length <= 2) {
-            await updateConversationTitle(user.uid, conversationId, userInput);
+          if (isFirstMessage) {
+            const summary = await updateConversationTitle(user.uid, conversationId, userInput);
+            if (summary) {
+              onTitleUpdate(conversationId, summary);
+            }
           }
         } else {
           throw new Error('Failed to get AI response');

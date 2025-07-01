@@ -1,7 +1,5 @@
 
-'use server';
-
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { summarizeConversation } from '@/ai/flows/summarize-conversation';
 import {
   collection,
@@ -16,7 +14,6 @@ import {
   updateDoc,
   getDoc,
 } from 'firebase/firestore';
-import { revalidatePath } from 'next/cache';
 
 interface Message {
   id: string;
@@ -27,7 +24,7 @@ interface Message {
   replyTo?: string;
 }
 
-interface Conversation {
+export interface Conversation {
   id: string;
   title: string;
   lastUpdated: Timestamp;
@@ -69,28 +66,33 @@ export async function addMessage(userId: string, conversationId: string, message
 }
 
 // Start a new conversation
-export async function startNewConversation(userId: string): Promise<string> {
+export async function startNewConversation(userId: string): Promise<Conversation> {
   const conversationRef = collection(db, `users/${userId}/conversations`);
-  const newConversation = await addDoc(conversationRef, {
+  const newConversationData = {
     title: 'New Chat',
     lastUpdated: serverTimestamp(),
-  });
-  revalidatePath('/chat');
-  return newConversation.id;
+  };
+  const newDocRef = await addDoc(conversationRef, newConversationData);
+  return {
+    id: newDocRef.id,
+    title: 'New Chat',
+    lastUpdated: Timestamp.now()
+  };
 }
 
 // Update conversation title based on summary
-export async function updateConversationTitle(userId: string, conversationId: string, firstUserInput: string) {
+export async function updateConversationTitle(userId: string, conversationId: string, firstUserInput: string): Promise<string | null> {
     try {
         const result = await summarizeConversation({ conversation: firstUserInput });
         if (result.summary) {
             const conversationRef = doc(db, `users/${userId}/conversations/${conversationId}`);
             await updateDoc(conversationRef, { title: result.summary });
-            revalidatePath('/chat');
-            revalidatePath(`/chat/${conversationId}`);
+            return result.summary;
         }
+        return null;
     } catch (error) {
         console.error("Failed to summarize and update title:", error);
+        return null;
     }
 }
 

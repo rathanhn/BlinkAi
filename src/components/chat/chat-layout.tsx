@@ -33,14 +33,9 @@ import {
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { logout } from '@/app/auth/actions';
-import { getConversations, startNewConversation } from '@/app/chat/actions';
+import { getConversations, startNewConversation, type Conversation } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-
-interface Conversation {
-  id: string;
-  title: string;
-}
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -87,11 +82,18 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       return;
     }
     try {
-      const newConversationId = await startNewConversation(user.uid);
-      router.push(`/chat/${newConversationId}`);
+      const newConversation = await startNewConversation(user.uid);
+      setConversations(prev => [newConversation, ...prev]);
+      router.push(`/chat/${newConversation.id}`);
     } catch (error) {
       toast({ title: 'Error', description: 'Could not start a new chat.', variant: 'destructive' });
     }
+  };
+
+  const handleTitleUpdate = (conversationId: string, newTitle: string) => {
+    setConversations(prev => 
+        prev.map(c => c.id === conversationId ? { ...c, title: newTitle } : c)
+    );
   };
   
   const getInitials = (name?: string | null) => {
@@ -219,7 +221,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 )}
             </header>
             {conversationId ? (
-              <Chat conversationId={conversationId} user={user} />
+              <Chat conversationId={conversationId} user={user} onTitleUpdate={handleTitleUpdate} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <Logo className="w-20 h-20 text-primary mb-4" />
