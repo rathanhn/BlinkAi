@@ -20,9 +20,6 @@ import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import Link from 'next/link';
-import { auth } from '@/lib/firebase';
-import type { User } from 'firebase/auth';
-import { onAuthStateChanged } from 'firebase/auth';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +34,16 @@ import { getConversations, startNewConversation, type Conversation } from '@/lib
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
+const MOCK_USER_KEY = 'blinkai-user';
+
+// Mock user type
+interface User {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
+
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -46,16 +53,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    console.log("ChatLayout: Setting up Firebase auth listener.");
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log("ChatLayout: Auth state changed. User authenticated:", !!currentUser);
-      setUser(currentUser);
-      setLoadingAuth(false);
-    });
-    return () => {
-      console.log("ChatLayout: Cleaning up auth listener.");
-      unsubscribe()
-    };
+    console.log("ChatLayout: Checking for mock user in localStorage.");
+    const storedUser = localStorage.getItem(MOCK_USER_KEY);
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setLoadingAuth(false);
   }, []);
 
   useEffect(() => {
@@ -105,6 +108,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return name[0];
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem(MOCK_USER_KEY);
+    logout();
+  };
+
   if (loadingAuth || !user) {
     return (
        <div className="flex items-center justify-center min-h-screen bg-background">
@@ -145,7 +153,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                           <span>Settings</span>
                         </Link>
                        </DropdownMenuItem>
-                       <DropdownMenuItem onClick={() => logout()}>
+                       <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />
                          <span>Log out</span>
                        </DropdownMenuItem>
@@ -212,7 +220,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             <span>Settings</span>
                           </Link>
                         </DropdownMenuItem>
-                       <DropdownMenuItem onClick={() => logout()}>
+                       <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />
                          <span>Log out</span>
                        </DropdownMenuItem>

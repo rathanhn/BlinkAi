@@ -1,7 +1,8 @@
+
 "use client";
 
 import { addMessage, getMessages, updateMessageReaction, updateConversationTitle } from "@/lib/chat-service";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { Bot, SendHorizonal, User, ThumbsUp, ThumbsDown, Heart, MessageSquareQuote, X } from "lucide-react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useToast } from "@/hooks/use-toast";
-import type { User as FirebaseUser } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateChatResponse } from "@/ai/flows/generate-chat-response";
 
@@ -20,6 +20,14 @@ interface Message {
   timestamp: Date;
   reactions?: { [key: string]: string[] }; // a reaction can be voted by multiple userIds
   replyTo?: string;
+}
+
+// Mock user type
+interface FirebaseUser {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
 }
 
 export function Chat({ 
@@ -148,7 +156,7 @@ export function Chat({
     } catch(e) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save reaction.' });
       // Revert optimistic update if API call fails
-      setMessages(messages);
+      getMessages(user.uid, conversationId).then(setMessages);
     }
   };
   

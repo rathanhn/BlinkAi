@@ -3,8 +3,7 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -16,25 +15,21 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { signupWithEmail } from '@/app/auth/actions';
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? 'Creating Account...' : 'Create Account'}
-    </Button>
-  );
-}
+const MOCK_USER_KEY = 'blinkai-user';
 
 export function SignupForm() {
-  const [state, formAction] = useActionState(signupWithEmail, null);
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [strength, setStrength] = useState({
     value: 0,
     text: '',
     className: '',
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const checkPasswordStrength = (pass: string) => {
     let score = 0;
@@ -75,6 +70,28 @@ export function SignupForm() {
     setPassword(newPassword);
     checkPasswordStrength(newPassword);
   };
+  
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setLoading(false);
+      return;
+    }
+
+    const mockUser = {
+      uid: `mock_${email}`,
+      displayName: name,
+      email: email,
+      photoURL: null,
+    };
+
+    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser));
+    router.push('/chat');
+  };
 
   return (
     <Card className="w-full max-w-md">
@@ -85,23 +102,17 @@ export function SignupForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" name="name" type="text" placeholder="Your Name" required />
+            <Input id="name" name="name" type="text" placeholder="Your Name" required value={name} onChange={(e) => setName(e.target.value)}/>
             <p className="text-xs text-muted-foreground">
               The AI will use this name to address you.
             </p>
-             {state?.errors?.name && (
-              <p className="text-xs text-destructive">{state.errors.name[0]}</p>
-            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" placeholder="m@example.com" required />
-             {state?.errors?.email && (
-              <p className="text-xs text-destructive">{state.errors.email[0]}</p>
-            )}
+            <Input id="email" name="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
@@ -113,9 +124,6 @@ export function SignupForm() {
               onChange={handlePasswordChange}
               required
             />
-             {state?.errors?.password && (
-              <p className="text-xs text-destructive">{state.errors.password[0]}</p>
-            )}
           </div>
           {password.length > 0 && (
             <div className="space-y-1">
@@ -125,10 +133,12 @@ export function SignupForm() {
               </p>
             </div>
           )}
-           {state?.message && (
-            <p className="text-sm text-destructive text-center">{state.message}</p>
+           {error && (
+            <p className="text-sm text-destructive text-center">{error}</p>
           )}
-          <SubmitButton />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
+          </Button>
         </form>
         <div className="mt-4 text-center text-sm">
           Already have an account?{' '}

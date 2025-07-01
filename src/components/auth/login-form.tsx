@@ -15,14 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo, GoogleIcon } from '@/components/icons';
-import { auth, db } from '@/lib/firebase';
-import { 
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider
-} from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
 
+const MOCK_USER_KEY = 'blinkai-user';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -36,41 +30,37 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
 
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push('/chat');
-    } catch (error: any) {
-      console.error("Login Client Error:", error.code, error.message);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        setError("Invalid email or password. Please try again.");
-      } else {
-        setError("An unexpected error occurred. Please try again.");
-      }
+    // In a real app, you'd validate this. Here, we'll just log in.
+    if (!email || !password) {
+      setError("Please enter email and password.");
       setLoading(false);
+      return;
     }
+
+    const mockUser = {
+      uid: `mock_${email}`,
+      displayName: email.split('@')[0],
+      email: email,
+      photoURL: null,
+    };
+
+    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser));
+    router.push('/chat');
   };
   
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
-    const provider = new GoogleAuthProvider();
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-      }, { merge: true });
+    
+    const mockUser = {
+      uid: 'mock_google_user',
+      displayName: 'Google User',
+      email: 'google.user@example.com',
+      photoURL: `https://placehold.co/100x100.png`,
+    };
 
-      router.push('/chat');
-    } catch (error: any) {
-      console.error("Google sign-in error", error);
-      setError(error.message);
-      setLoading(false);
-    }
+    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser));
+    router.push('/chat');
   };
 
   return (

@@ -5,23 +5,35 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Logo } from '@/components/icons';
 import { Lightbulb, MessageSquareHeart, Zap, Bot, User, LogOut } from 'lucide-react';
-import type { User as FirebaseUser } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { logout } from '@/app/auth/actions';
+
+const MOCK_USER_KEY = 'blinkai-user';
+
+interface FirebaseUser {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
 
 export function LandingPage() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    const storedUser = localStorage.getItem(MOCK_USER_KEY);
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setLoading(false);
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem(MOCK_USER_KEY);
+    setUser(null);
+    logout();
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -34,7 +46,7 @@ export function LandingPage() {
           {!loading && (
             user ? (
               <>
-                <Button variant="ghost" onClick={() => logout()}>
+                <Button variant="ghost" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </Button>

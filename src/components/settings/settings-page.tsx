@@ -16,50 +16,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Camera, ChevronLeft } from 'lucide-react';
-import { auth, storage, db } from '@/lib/firebase';
-import { updateProfile } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc } from 'firebase/firestore';
-import type { User as FirebaseUser } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
+
+const MOCK_USER_KEY = 'blinkai-user';
+
+// Mock user type
+interface FirebaseUser {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
 
 export function SettingsPage() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [name, setName] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-      if (currentUser?.photoURL) {
-        setImagePreview(currentUser.photoURL);
-      }
-    });
-    return () => unsubscribe();
+    const storedUser = localStorage.getItem(MOCK_USER_KEY);
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      setName(parsedUser.displayName || '');
+      setImagePreview(parsedUser.photoURL || null);
+    }
+    setLoading(false);
   }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
     }
   };
 
   const triggerFileSelect = () => fileInputRef.current?.click();
-
-  const getInitials = (name?: string | null) => {
-    if (!name) return 'U';
-    const names = name.split(' ');
-    if (names.length > 1) {
-      return `${names[0][0]}${names[names.length - 1][0]}`;
-    }
-    return name[0];
-  };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -70,9 +69,6 @@ export function SettingsPage() {
     }
 
     setIsSaving(true);
-    const formData = new FormData(e.currentTarget);
-    const name = formData.get('name') as string;
-    const profilePicture = formData.get('profilePicture') as File;
 
     if (!name || name.length < 2) {
       toast({ title: 'Error', description: "Name must be at least 2 characters.", variant: 'destructive' });
@@ -81,19 +77,25 @@ export function SettingsPage() {
     }
     
     try {
+      // Since we don't have a backend, the image "upload" is just a preview.
+      // If we had a backend, we'd upload `imageFile` here.
+      // For now, we'll just use the preview URL if it's a new blob.
       let photoURL = user.photoURL;
-      if (profilePicture && profilePicture.size > 0) {
-        const storageRef = ref(storage, `profilePictures/${user.uid}`);
-        await uploadBytes(storageRef, profilePicture);
-        photoURL = await getDownloadURL(storageRef);
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+          // In a real app, you would upload the file and get a permanent URL.
+          // For this mock, we can't persist blob URLs, so we'll just show a success message.
+          // The image will revert on next page load unless we stored it in localStorage (which is inefficient for files).
+          photoURL = imagePreview; 
       }
       
-      await updateProfile(user, { displayName: name, photoURL });
-
-      await setDoc(doc(db, "users", user.uid), {
+      const updatedUser = {
+        ...user,
         displayName: name,
-        photoURL: photoURL,
-      }, { merge: true });
+        photoURL: photoURL
+      };
+
+      localStorage.setItem(MOCK_USER_KEY, JSON.stringify(updatedUser));
+      setUser(updatedUser);
 
       toast({ title: 'Success', description: "Profile updated successfully!" });
 
@@ -159,7 +161,7 @@ export function SettingsPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" name="name" type="text" defaultValue={user?.displayName || ''} required />
+            <Input id="name" name="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
             <p className="text-xs text-muted-foreground">
               The AI will use this name to address you.
             </p>
