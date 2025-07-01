@@ -52,21 +52,20 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
       setLoadingAuth(false);
       if (currentUser) {
+        setUser(currentUser);
         setLoadingConversations(true);
         const convos = await getConversations(currentUser.uid);
         setConversations(convos);
         setLoadingConversations(false);
       } else {
-        setConversations([]);
-        setLoadingConversations(false);
+        router.push('/login');
       }
     });
     return () => unsubscribe();
-  }, []);
-
+  }, [router]);
+  
   const handleNewChat = async () => {
     if (!user) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
@@ -89,7 +88,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return name[0];
   };
 
-  if (loadingAuth) {
+  if (loadingAuth || !user) {
     return (
        <div className="flex items-center justify-center min-h-screen bg-background">
           <div className="flex items-center gap-2">
