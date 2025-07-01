@@ -87,6 +87,8 @@ export function Chat({
     const userInput = input.trim();
     if (!userInput || isPending) return;
     
+    // For temporary chats, we don't save the first message until the AI responds,
+    // to prevent creating a conversation for every single message.
     const isFirstMessage = messages.length === 0;
 
     const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
@@ -132,6 +134,7 @@ export function Chat({
             id: crypto.randomUUID(),
             timestamp: new Date(),
           }
+          // Replace temp user message with one from the server if we had an id, otherwise just add the AI response
           setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, tempAiMessage]);
 
         } else {
@@ -197,7 +200,10 @@ export function Chat({
   }
 
   return (
-    <div className="flex flex-col h-full max-h-full">
+    <div className={cn(
+        "flex flex-col h-full max-h-full transition-all duration-500",
+        isPending && "bg-gradient-to-r from-purple-900/50 via-blue-900/50 to-purple-900/50 bg-200% animate-breathing-gradient"
+      )}>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 md:p-6 space-y-6">
@@ -310,7 +316,7 @@ export function Chat({
               }
             }}
             rows={1}
-            disabled={isPending}
+            disabled={isPending || !conversationId && isPending}
           />
           <Button type="submit" size="lg" disabled={isPending || !input.trim()}>
             <SendHorizonal className="h-5 w-5" />

@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -35,7 +36,11 @@ const prompt = ai.definePrompt({
   name: 'summarizeConversationPrompt',
   input: {schema: SummarizeConversationInputSchema},
   output: {schema: SummarizeConversationOutputSchema},
-  prompt: `Summarize the following conversation: {{{conversation}}}`,
+  prompt: `Create a short, concise title (4 words maximum) for the following conversation. The title should capture the main topic of the conversation. Do not use quotes in the title.
+
+Conversation:
+{{{conversation}}}
+`,
 });
 
 const summarizeConversationFlow = ai.defineFlow(

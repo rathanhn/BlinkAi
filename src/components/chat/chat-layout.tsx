@@ -15,7 +15,7 @@ import {
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
-import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, Ghost } from 'lucide-react';
+import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -35,8 +35,6 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { Switch } from '../ui/switch';
-import { Label } from '../ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,7 +54,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
-  const [isTempChat, setIsTempChat] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -101,10 +98,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const handleNewChat = async () => {
     if (!user) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
-      return;
-    }
-    if (isTempChat) {
-      router.push('/chat');
       return;
     }
     try {
@@ -281,13 +274,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                       <Plus className="mr-2" />
                       New Chat
                     </SidebarMenuButton>
-                    <div className="flex items-center justify-center gap-2 pt-1">
-                      <Switch id="temp-chat" checked={isTempChat} onCheckedChange={setIsTempChat} />
-                      <Label htmlFor="temp-chat" className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                        <Ghost className="h-4 w-4"/>
-                        Temporary Chat
-                      </Label>
-                    </div>
                 </div>
               </SidebarMenuItem>
               <SidebarSeparator />
