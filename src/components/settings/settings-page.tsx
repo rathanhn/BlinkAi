@@ -21,14 +21,7 @@ import { Skeleton } from '../ui/skeleton';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-
-// Helper function to convert file to Base64
-const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-});
+import { uploadProfilePicture } from '@/app/settings/actions';
 
 export function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -80,8 +73,14 @@ export function SettingsPage() {
       let newPhotoURL = user.photoURL;
 
       if (imageFile) {
-        // Convert the image to a Base64 string to store in Firestore/Auth
-        newPhotoURL = await toBase64(imageFile);
+        const formData = new FormData();
+        formData.append('profilePicture', imageFile);
+        const result = await uploadProfilePicture(formData);
+
+        if (!result.success || !result.url) {
+          throw new Error(result.error || 'Image upload failed.');
+        }
+        newPhotoURL = result.url;
       }
       
       // Update Firebase Auth profile
