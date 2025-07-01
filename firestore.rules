@@ -1,30 +1,27 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Users can read and write their own user document
+
+    // Allow users to read and write their own user document.
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     match /conversations/{conversationId} {
-      // Allow reading a single conversation if the user owns it
-      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      // Allow listing conversations but only when the query is for the user's own chats
-      allow list: if request.auth != null && request.query.resource.data.userId == request.auth.uid;
+      // Allow a user to read a conversation if they are the owner.
+      // This single 'read' rule covers both 'get' (for a single chat) and 'list' (for queries).
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       
-      // Allow creating a conversation if the userId is set to the user's own UID
+      // Allow a user to create a conversation if the new document's userId matches their own.
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // Allow updating a conversation (e.g., title) if the user owns it
+
+      // Allow a user to update a conversation (e.g., the title or lastUpdated timestamp) if they are the owner.
       allow update: if request.auth != null && resource.data.userId == request.auth.uid;
     }
-    
+
     match /conversations/{conversationId}/messages/{messageId} {
-      // Allow reading/writing messages only if the user owns the parent conversation
+      // Allow read/write of messages if the user owns the parent conversation.
+      // The get() function reads the parent conversation document to check for ownership.
       allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
     }
   }
