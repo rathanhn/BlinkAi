@@ -1,7 +1,9 @@
+
 'use client';
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
+import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -15,8 +17,19 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Camera } from 'lucide-react';
+import { signupWithEmail } from '@/app/auth/actions';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? 'Creating Account...' : 'Create Account'}
+    </Button>
+  );
+}
 
 export function SignupForm() {
+  const [state, formAction] = useFormState(signupWithEmail, null);
   const [password, setPassword] = useState('');
   const [strength, setStrength] = useState({
     value: 0,
@@ -43,19 +56,19 @@ export function SignupForm() {
       setStrength({
         value: 33,
         text: 'Not Secure',
-        className: 'bg-destructive text-destructive',
+        className: 'bg-destructive text-destructive-foreground',
       });
     } else if (score < 5) {
       setStrength({
         value: 66,
         text: 'Medium',
-        className: 'bg-primary text-primary',
+        className: 'bg-yellow-500 text-yellow-500',
       });
     } else {
       setStrength({
         value: 100,
         text: 'Strong',
-        className: 'bg-primary text-primary',
+        className: 'bg-primary text-primary-foreground',
       });
     }
   };
@@ -80,11 +93,11 @@ export function SignupForm() {
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Create an Account</CardTitle>
         <CardDescription>
-          Join BlinkAi and get your personal AI assistant.
+          Let&apos;s get you started! Your new AI buddy is just a few clicks away.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4">
+        <form action={formAction} className="space-y-4">
           <div className="flex justify-center">
             <div className="relative">
               <Avatar
@@ -110,29 +123,40 @@ export function SignupForm() {
                 onChange={handleImageChange}
                 className="hidden"
                 accept="image/*"
+                name="profilePicture"
               />
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" type="text" placeholder="Your Name" required />
+            <Input id="name" name="name" type="text" placeholder="Your Name" required />
             <p className="text-xs text-muted-foreground">
               The AI will use this name to address you.
             </p>
+             {state?.errors?.name && (
+              <p className="text-xs text-destructive">{state.errors.name[0]}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="m@example.com" required />
+            <Input id="email" name="email" type="email" placeholder="m@example.com" required />
+             {state?.errors?.email && (
+              <p className="text-xs text-destructive">{state.errors.email[0]}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <Input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={handlePasswordChange}
               required
             />
+             {state?.errors?.password && (
+              <p className="text-xs text-destructive">{state.errors.password[0]}</p>
+            )}
           </div>
           {password.length > 0 && (
             <div className="space-y-1">
@@ -142,9 +166,10 @@ export function SignupForm() {
               </p>
             </div>
           )}
-          <Button type="submit" className="w-full">
-            Create Account
-          </Button>
+           {state?.message && (
+            <p className="text-sm text-destructive text-center">{state.message}</p>
+          )}
+          <SubmitButton />
         </form>
         <div className="mt-4 text-center text-sm">
           Already have an account?{' '}

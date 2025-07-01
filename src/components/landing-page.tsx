@@ -1,10 +1,28 @@
+
+'use client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Logo } from '@/components/icons';
-import { Lightbulb, MessageSquareHeart, Zap, Bot, User } from 'lucide-react';
+import { Lightbulb, MessageSquareHeart, Zap, Bot, User, LogOut } from 'lucide-react';
+import type { User as FirebaseUser } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { logout } from '@/app/auth/actions';
 
 export function LandingPage() {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <header className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -13,12 +31,28 @@ export function LandingPage() {
           <span className="text-xl font-bold">BlinkAi</span>
         </Link>
         <nav className="flex items-center gap-4">
-          <Button variant="ghost" asChild>
-            <Link href="/login">Sign In</Link>
-          </Button>
-          <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
-            <Link href="/chat">Get Started</Link>
-          </Button>
+          {!loading && (
+            user ? (
+              <>
+                <Button variant="ghost" onClick={() => logout()}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </Button>
+                <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
+                  <Link href="/chat">Go to Chat</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" asChild>
+                  <Link href="/login">Sign In</Link>
+                </Button>
+                <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
+                  <Link href="/chat">Get Started</Link>
+                </Button>
+              </>
+            )
+          )}
         </nav>
       </header>
 
