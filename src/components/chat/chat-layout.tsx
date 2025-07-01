@@ -78,16 +78,16 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     if (user) {
       setLoadingConversations(true);
-      Promise.all([
-        getConversations(user.uid),
-        getArchivedConversations(user.uid)
-      ]).then(([activeConvos, archivedConvos]) => {
+      const activeQuery = getConversations(user.uid);
+      const archivedQuery = getArchivedConversations(user.uid);
+
+      Promise.all([activeQuery, archivedQuery]).then(([activeConvos, archivedConvos]) => {
           const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
       }).catch(err => {
           console.error("Error fetching conversations:", err);
-          toast({ title: 'Error', description: 'Could not fetch conversations.', variant: 'destructive' });
+          toast({ title: 'Error', description: 'Could not fetch conversations. Check Firestore rules and indexes.', variant: 'destructive' });
       }).finally(() => {
           setLoadingConversations(false);
       });
@@ -343,9 +343,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             </header>
             {user ? (
               <Chat 
+                key={conversationId}
                 conversationId={conversationId} 
                 user={user} 
                 onTitleUpdate={handleTitleUpdate} 
+                setActiveConversations={setActiveConversations}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center">

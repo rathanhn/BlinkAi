@@ -1,11 +1,13 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, Timestamp } from "@/lib/chat-service";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, startNewConversation, type Conversation, Timestamp } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { SendHorizonal, User, ThumbsUp, ThumbsDown, Heart, MessageSquareQuote, X } from "lucide-react";
 import React, { useEffect, useRef, useState, useTransition } from "react";
@@ -14,6 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateChatResponse } from "@/ai/flows/generate-chat-response";
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from "@/components/icons";
+import { useRouter } from "next/navigation";
 
 
 interface Message {
@@ -28,18 +31,22 @@ interface Message {
 export function Chat({ 
   conversationId, 
   user, 
-  onTitleUpdate 
+  onTitleUpdate,
+  setActiveConversations,
 }: { 
   conversationId?: string; 
   user: FirebaseUser;
   onTitleUpdate: (id: string, title: string) => void;
+  setActiveConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [isTempChat, setIsTempChat] = useState(!conversationId);
   const { toast } = useToast();
+  const router = useRouter();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,6 +56,7 @@ export function Chat({
   };
 
   useEffect(() => {
+    setIsTempChat(!conversationId);
     if (!conversationId) {
         setMessages([]);
         setLoading(false);
@@ -87,21 +95,17 @@ export function Chat({
     e.preventDefault();
     const userInput = input.trim();
     if (!userInput || isPending) return;
-    
-    // For temporary chats, we don't save the first message until the AI responds,
-    // to prevent creating a conversation for every single message.
-    const isFirstMessage = messages.length === 0;
 
-    const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
+    let currentConvoId = conversationId;
+    let isNewChat = false;
+    
+    // UI message for user
+    const tempUserMessage: Message = {
+      id: crypto.randomUUID(),
       role: "user",
       content: userInput,
-      ...(replyingTo && { replyTo: replyingTo.id }),
-    };
-    
-    const tempUserMessage: Message = {
-      ...(newUserMessage as Message),
-      id: crypto.randomUUID(),
       timestamp: new Date(),
+      ...(replyingTo && { replyTo: replyingTo.id }),
     }
     setMessages((prev) => [...prev, tempUserMessage]);
     setInput("");
@@ -109,8 +113,31 @@ export function Chat({
     
     startTransition(async () => {
       try {
-        if (conversationId) {
-            await addMessage(conversationId, newUserMessage);
+        // If starting a new permanent chat from the temporary chat view
+        if (!conversationId && !isTempChat) {
+          isNewChat = true;
+          const newConversation = await startNewConversation(user.uid);
+          if (newConversation) {
+              currentConvoId = newConversation.id;
+              const serializableConvo = {
+                  ...newConversation,
+                  lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
+              };
+              setActiveConversations(prev => [serializableConvo as any, ...prev]);
+              router.push(`/chat/${newConversation.id}`);
+          } else {
+              throw new Error("Failed to create a new conversation.");
+          }
+        }
+
+        const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
+          role: "user",
+          content: userInput,
+          ...(replyingTo && { replyTo: replyingTo.id }),
+        };
+
+        if (currentConvoId) {
+            await addMessage(currentConvoId, newUserMessage);
         }
 
         const aiResponse = await generateChatResponse({ userInput, personaInformation: `The user's name is ${user.displayName}.` });
@@ -120,24 +147,25 @@ export function Chat({
             role: "assistant",
             content: aiResponse.aiResponse,
           };
-          if (conversationId) {
-            await addMessage(conversationId, aiMessage);
-            
-            if (isFirstMessage) {
-              const summary = await updateConversationTitle(conversationId, userInput);
+          
+          if (currentConvoId) {
+            await addMessage(currentConvoId, aiMessage);
+            if (isNewChat) {
+              const summary = await updateConversationTitle(currentConvoId, userInput);
               if (summary) {
-                onTitleUpdate(conversationId, summary);
+                onTitleUpdate(currentConvoId, summary);
               }
             }
           }
-           const tempAiMessage: Message = {
+
+          // This logic now runs for both temp and permanent chats
+          const tempAiMessage: Message = {
             ...(aiMessage as Message),
             id: crypto.randomUUID(),
             timestamp: new Date(),
           }
-          // Replace temp user message with one from the server if we had an id, otherwise just add the AI response
+          // Replace temp user message and add AI response
           setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, tempAiMessage]);
-
         } else {
           throw new Error('Failed to get AI response');
         }
@@ -175,6 +203,7 @@ export function Chat({
       await updateMessageReaction(conversationId, messageId, reaction, user.uid);
     } catch(e) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save reaction.' });
+      // Re-fetch to correct UI on error
       getMessages(conversationId).then(history => {
           const serializableHistory = history.map(msg => ({
               ...msg,
@@ -205,6 +234,17 @@ export function Chat({
         "flex flex-col h-full max-h-full",
         isPending && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
+      <div className="p-4 border-b bg-card flex justify-end items-center gap-2">
+          <Label htmlFor="temp-chat-toggle" className="text-sm text-muted-foreground">
+            Temporary Chat
+          </Label>
+          <Switch
+            id="temp-chat-toggle"
+            checked={isTempChat}
+            onCheckedChange={setIsTempChat}
+            disabled={!!conversationId || isPending}
+          />
+      </div>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 md:p-6 space-y-6">
@@ -225,13 +265,13 @@ export function Chat({
                 )}
               >
                 {message.role === "assistant" && (
-                  <Avatar className="w-8 h-8 border shadow-sm">
+                  <Avatar className="w-8 h-8 border shadow-sm shrink-0">
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       <Logo className="w-5 h-5" />
                     </AvatarFallback>
                   </Avatar>
                 )}
-                <div className="relative flex flex-col items-end">
+                <div className="relative flex flex-col items-end max-w-full md:max-w-[75%]">
                     {message.replyTo && getReplyingToMessage(message.replyTo) && (
                       <div className="text-xs text-muted-foreground bg-background border rounded-t-lg px-2 py-1 max-w-full truncate">
                           Replying to: <i>"{getReplyingToMessage(message.replyTo)?.content}"</i>
@@ -239,11 +279,11 @@ export function Chat({
                     )}
                     <div
                       className={cn(
-                        "max-w-full rounded-lg p-3 shadow-sm",
+                        "rounded-lg p-3 shadow-sm",
                         message.role === "user"
                           ? "bg-gradient-to-br from-primary to-blue-500 text-primary-foreground"
                           : "bg-card",
-                        message.replyTo && "rounded-t-none"
+                        message.replyTo && getReplyingToMessage(message.replyTo) && "rounded-t-none"
                       )}
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
@@ -258,15 +298,15 @@ export function Chat({
                     </div>
                 </div>
                 {message.role === "user" && (
-                  <Avatar className="w-8 h-8 border shadow-sm">
-                    {user?.photoURL ? <AvatarImage src={user.photoURL} /> : <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>}
+                  <Avatar className="w-8 h-8 border shadow-sm shrink-0">
+                    {user?.photoURL ? <AvatarImage src={user.photoURL} alt={user.displayName || "User"} /> : <AvatarFallback><User className="w-5 h-5" /></AvatarFallback>}
                   </Avatar>
                 )}
               </motion.div>
             ))}
             {isPending && (
               <div className="flex items-start gap-4">
-                <Avatar className="w-8 h-8 border shadow-sm">
+                <Avatar className="w-8 h-8 border shadow-sm shrink-0">
                   <AvatarFallback className="bg-primary text-primary-foreground">
                     <Logo className="w-5 h-5" />
                   </AvatarFallback>
@@ -311,7 +351,7 @@ export function Chat({
         <form id="chat-form" onSubmit={handleSubmit} className="flex items-center gap-4">
           <Textarea
             ref={textareaRef}
-            placeholder={conversationId ? "Type your message..." : "Temporary chat. History will not be saved."}
+            placeholder={isTempChat ? "Temporary chat. History will not be saved." : "Type your message..."}
             className={cn("flex-1 resize-none min-h-[40px] max-h-48",
               replyingTo && "rounded-t-none",
               isPending && "bg-background/50 placeholder:text-foreground/80"
@@ -325,7 +365,7 @@ export function Chat({
               }
             }}
             rows={1}
-            disabled={isPending || !conversationId && isPending}
+            disabled={isPending}
           />
           <Button type="submit" size="lg" disabled={isPending || !input.trim()}>
             <SendHorizonal className="h-5 w-5" />
