@@ -1,0 +1,11 @@
+[
+  {
+    "origin": [
+      "https://6000-firebase-studio-1751357537191.cluster-isls3qj2gbd5qs4jkjqvhahfv6.cloudworkstations.dev",
+      "http://localhost:9002"
+    ],
+    "method": ["GET", "PUT", "POST", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]
