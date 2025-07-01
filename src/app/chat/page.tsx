@@ -1,10 +1,7 @@
-import { notFound } from 'next/navigation';
+import { ChatLayout } from '@/components/chat/chat-layout';
 
-// This file is intentionally left to cause a 404 if accessed directly.
-// The main chat logic is now split between /chat (the welcome screen)
-// and /chat/[conversationId] (for specific chats).
-// This file can be safely deleted, but to avoid routing conflicts with
-// the new structure, we're making it inactive.
-export default function ConflictingChatPage() {
-  notFound();
+export default function ChatPage() {
+  // This page handles the base /chat route.
+  // It renders the layout which shows a welcome message.
+  return <ChatLayout />;
 }

@@ -1,7 +1,7 @@
-import { ChatLayout } from '@/components/chat/chat-layout';
+import { notFound } from 'next/navigation';
 
-export default function ChatPage() {
-  // This page now handles the base /chat route.
-  // It renders the layout which shows a welcome message.
-  return <ChatLayout />;
+// This optional catch-all route is disabled to prevent conflicts with
+// more specific routes like /chat and /chat/[conversationId].
+export default function DisabledCatchAllPage() {
+  notFound();
 }
