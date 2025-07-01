@@ -1,3 +1,4 @@
+
 import { ChatLayout } from '@/components/chat/chat-layout';
 
 // This page handles both the base /chat route and /chat/[conversationId] routes.
