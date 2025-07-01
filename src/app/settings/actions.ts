@@ -3,7 +3,7 @@
 
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from '@/lib/firebase';
-import { deleteAllConversationsForUser } from '@/lib/chat-service';
+import { deleteAllConversationsForUser, unarchiveAllConversationsForUser } from '@/lib/chat-service';
 import { doc, updateDoc } from 'firebase/firestore';
 
 // Cloudinary is configured automatically via the CLOUDINARY_URL environment variable.
@@ -66,6 +66,19 @@ export async function clearAllConversations(userId: string) {
     }
     try {
         await deleteAllConversationsForUser(userId);
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+
+export async function unarchiveAllConversations(userId: string) {
+    if (!db || !userId) {
+        return { success: false, error: 'User or database not available.' };
+    }
+    try {
+        await unarchiveAllConversationsForUser(userId);
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };

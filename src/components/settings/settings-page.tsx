@@ -15,13 +15,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User as UserIcon, Camera, ChevronLeft, Trash2 } from 'lucide-react';
+import { User as UserIcon, Camera, ChevronLeft, Trash2, ArchiveRestore, Sun, Moon, Laptop } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { uploadProfilePicture, updateUserPersona, clearAllConversations } from '@/app/settings/actions';
+import { uploadProfilePicture, updateUserPersona, clearAllConversations, unarchiveAllConversations } from '@/app/settings/actions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from '../ui/textarea';
 import {
@@ -35,11 +35,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { useTheme } from 'next-themes';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { Separator } from '../ui/separator';
+import { Switch } from '../ui/switch';
 
 export function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { setTheme, theme } = useTheme();
   
   // Account state
   const [name, setName] = useState('');
@@ -152,6 +157,19 @@ export function SettingsPage() {
     }
     setIsSaving(false);
   };
+  
+  const handleRestoreAll = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    const result = await unarchiveAllConversations(user.uid);
+    if (result.success) {
+        toast({ title: 'Success', description: 'All archived chats have been restored.' });
+    } else {
+        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+    }
+    setIsSaving(false);
+  };
+
 
   const renderSkeleton = () => (
     <Card className="w-full max-w-lg">
@@ -232,6 +250,29 @@ export function SettingsPage() {
                     <CardDescription>Manage your conversation history.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                     <div className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                            <h3 className="font-semibold">Restore Archived Chats</h3>
+                            <p className="text-sm text-muted-foreground">Move all your archived chats back to the main conversation list.</p>
+                        </div>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" disabled={isSaving}><ArchiveRestore className="mr-2 h-4 w-4"/>Restore All</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will restore all archived conversations.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleRestoreAll}>Restore</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
                     <div className="flex items-center justify-between rounded-lg border border-destructive/50 p-4">
                         <div>
                             <h3 className="font-semibold">Clear History</h3>
@@ -289,8 +330,40 @@ export function SettingsPage() {
                     <CardTitle>System Settings</CardTitle>
                     <CardDescription>Manage application theme and system preferences.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground">System settings will be available in a future update.</p>
+                <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                        <Label>Theme</Label>
+                        <p className="text-sm text-muted-foreground">Select the theme for the application.</p>
+                        <RadioGroup
+                            value={theme}
+                            onValueChange={setTheme}
+                            className="grid max-w-md grid-cols-3 gap-4 pt-2"
+                            >
+                            <Label className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary cursor-pointer">
+                                <RadioGroupItem value="light" id="light" className="sr-only" />
+                                <Sun className="h-6 w-6 mb-2" />
+                                Light
+                            </Label>
+                            <Label className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary cursor-pointer">
+                                <RadioGroupItem value="dark" id="dark" className="sr-only" />
+                                <Moon className="h-6 w-6 mb-2" />
+                                Dark
+                            </Label>
+                            <Label className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary cursor-pointer">
+                                <RadioGroupItem value="system" id="system" className="sr-only" />
+                                <Laptop className="h-6 w-6 mb-2" />
+                                System
+                            </Label>
+                        </RadioGroup>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                            <h3 className="font-semibold">Email Notifications</h3>
+                            <p className="text-sm text-muted-foreground">Receive notifications about new features and updates.</p>
+                        </div>
+                        <Switch disabled />
+                    </div>
                 </CardContent>
                  <CardFooter className="justify-start">
                        <Button variant="link" asChild className="p-0"><Link href="/chat"><ChevronLeft className="w-4 h-4 mr-2" />Back to Chat</Link></Button>

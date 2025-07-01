@@ -197,3 +197,23 @@ export async function deleteAllConversationsForUser(userId: string) {
         await deleteConversation(doc.id);
     }
 }
+
+// Un-archive all conversations for a user
+export async function unarchiveAllConversationsForUser(userId: string) {
+    if (!db) throw new Error("Firestore is not initialized.");
+    
+    const conversationsRef = collection(db, 'conversations');
+    const q = query(conversationsRef, where('userId', '==', userId), where('archived', '==', true));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+        return; // Nothing to do
+    }
+
+    const batch = writeBatch(db);
+    querySnapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { archived: false, lastUpdated: serverTimestamp() });
+    });
+    
+    await batch.commit();
+}
