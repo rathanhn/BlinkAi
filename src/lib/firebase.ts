@@ -12,26 +12,25 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-let app: FirebaseApp | undefined;
+let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 
-if (typeof window !== 'undefined' && !getApps().length) {
-  try {
-    if (firebaseConfig.apiKey) {
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } else {
-      console.error("Firebase configuration is missing. Please check your .env file.");
-    }
-  } catch (e) {
-    console.error("Firebase initialization error:", e);
-  }
-} else if (typeof window !== 'undefined') {
-  app = getApp();
+if (firebaseConfig.apiKey) {
+  // Initialize Firebase for SSR and client-side
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
+} else {
+  console.error("Firebase configuration is missing. Please check your environment variables.");
+  // Assign undefined to prevent breaking imports, though runtime errors will occur if used.
+  // @ts-ignore
+  app = undefined;
+  // @ts-ignore
+  auth = undefined;
+  // @ts-ignore
+  db = undefined;
 }
+
 
 export { app, auth, db };
