@@ -15,22 +15,23 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Camera, ChevronLeft } from 'lucide-react';
+import { User as UserIcon, Camera, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
+import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
-const MOCK_USER_KEY = 'blinkai-user';
-
-// Mock user type
-interface FirebaseUser {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-}
+// Helper function to convert file to Base64
+const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+});
 
 export function SettingsPage() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState('');
@@ -40,14 +41,19 @@ export function SettingsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem(MOCK_USER_KEY);
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-      setName(parsedUser.displayName || '');
-      setImagePreview(parsedUser.photoURL || null);
+    if (!auth) {
+        setLoading(false);
+        return;
     }
-    setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        setName(currentUser.displayName || '');
+        setImagePreview(currentUser.photoURL || null);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,44 +69,39 @@ export function SettingsPage() {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (!user) {
+    if (!user || !auth.currentUser || !db) {
       toast({ title: 'Error', description: "You must be logged in to update your profile.", variant: 'destructive' });
       return;
     }
 
     setIsSaving(true);
 
-    if (!name || name.length < 2) {
-      toast({ title: 'Error', description: "Name must be at least 2 characters.", variant: 'destructive' });
-      setIsSaving(false);
-      return;
-    }
-    
     try {
-      // Since we don't have a backend, the image "upload" is just a preview.
-      // If we had a backend, we'd upload `imageFile` here.
-      // For now, we'll just use the preview URL if it's a new blob.
-      let photoURL = user.photoURL;
-      if (imagePreview && imagePreview.startsWith('blob:')) {
-          // In a real app, you would upload the file and get a permanent URL.
-          // For this mock, we can't persist blob URLs, so we'll just show a success message.
-          // The image will revert on next page load unless we stored it in localStorage (which is inefficient for files).
-          photoURL = imagePreview; 
+      let newPhotoURL = user.photoURL;
+
+      if (imageFile) {
+        newPhotoURL = await toBase64(imageFile);
       }
       
-      const updatedUser = {
-        ...user,
+      // Update Firebase Auth profile
+      await updateProfile(auth.currentUser, {
         displayName: name,
-        photoURL: photoURL
-      };
+        photoURL: newPhotoURL,
+      });
+      
+      // Update user document in Firestore
+      await setDoc(doc(db, 'users', user.uid), {
+        displayName: name,
+        photoURL: newPhotoURL,
+      }, { merge: true });
 
-      localStorage.setItem(MOCK_USER_KEY, JSON.stringify(updatedUser));
-      setUser(updatedUser);
+      // Update local state to reflect changes immediately
+      setUser({ ...user, displayName: name, photoURL: newPhotoURL } as User);
 
       toast({ title: 'Success', description: "Profile updated successfully!" });
 
     } catch (error: any) {
-      toast({ title: 'Error', description: "An unexpected error occurred. Please try again.", variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || "An unexpected error occurred.", variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -117,6 +118,21 @@ export function SettingsPage() {
                 <Skeleton className="h-10 w-full" />
             </CardContent>
         </Card>
+    )
+  }
+  
+  if (!user) {
+    // This case might be hit briefly before redirect or if something goes wrong
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Not Logged In</CardTitle>
+          <CardDescription>You need to be logged in to view settings.</CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button asChild><Link href="/login">Go to Login</Link></Button>
+        </CardFooter>
+      </Card>
     )
   }
 
@@ -138,7 +154,7 @@ export function SettingsPage() {
               >
                 <AvatarImage src={imagePreview || ''} alt="Profile preview" />
                 <AvatarFallback className="bg-muted">
-                  <User className="w-12 h-12" />
+                  <UserIcon className="w-12 h-12" />
                 </AvatarFallback>
               </Avatar>
               <button

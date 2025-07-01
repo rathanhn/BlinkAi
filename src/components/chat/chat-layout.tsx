@@ -15,7 +15,7 @@ import {
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
-import { Home, Plus, Settings, Trash2, MessageSquare, LogOut } from 'lucide-react';
+import { Plus, Settings, MessageSquare, LogOut } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -30,19 +30,11 @@ import {
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { logout } from '@/app/auth/actions';
-import { getConversations, startNewConversation, type Conversation } from '@/lib/chat-service';
+import { getConversations, startNewConversation, type Conversation, Timestamp } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-
-const MOCK_USER_KEY = 'blinkai-user';
-
-// Mock user type
-interface User {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-}
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -53,30 +45,44 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    console.log("ChatLayout: Checking for mock user in localStorage.");
-    const storedUser = localStorage.getItem(MOCK_USER_KEY);
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoadingAuth(false);
-  }, []);
-
-  useEffect(() => {
-    if (!loadingAuth && !user) {
-      console.log("ChatLayout: No user found after auth check, redirecting to login.");
+    if (!auth) {
+      setLoadingAuth(false);
       router.push('/login');
+      return;
     }
-  }, [user, loadingAuth, router]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUser(user);
+      } else {
+        setUser(null);
+        router.push('/login');
+      }
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, [router]);
   
   useEffect(() => {
     if (user) {
       setLoadingConversations(true);
-      getConversations(user.uid).then(convos => {
-        setConversations(convos);
-        setLoadingConversations(false);
-      });
+      getConversations(user.uid)
+        .then(convos => {
+            // Firestore timestamps need to be converted to JS Dates for serialization
+            const serializableConvos = convos.map(c => ({
+                ...c,
+                lastUpdated: (c.lastUpdated as Timestamp).toDate(),
+            }));
+            setConversations(serializableConvos as any);
+        })
+        .catch(err => {
+            console.error("Error fetching conversations:", err);
+            toast({ title: 'Error', description: 'Could not fetch conversations.', variant: 'destructive' });
+        })
+        .finally(() => {
+            setLoadingConversations(false);
+        });
     }
-  }, [user]);
+  }, [user, toast]);
 
   
   const handleNewChat = async () => {
@@ -86,9 +92,15 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     }
     try {
       const newConversation = await startNewConversation(user.uid);
-      setConversations(prev => [newConversation, ...prev]);
+      // The new conversation from firestore needs its timestamp converted
+      const serializableConvo = {
+          ...newConversation,
+          lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
+      };
+      setConversations(prev => [serializableConvo as any, ...prev]);
       router.push(`/chat/${newConversation.id}`);
     } catch (error) {
+      console.error(error);
       toast({ title: 'Error', description: 'Could not start a new chat.', variant: 'destructive' });
     }
   };
@@ -108,12 +120,14 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return name[0];
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem(MOCK_USER_KEY);
-    logout();
+  const handleLogout = async () => {
+    if (auth) {
+        await signOut(auth);
+    }
+    await logout(); // server action redirect
   };
 
-  if (loadingAuth || !user) {
+  if (loadingAuth) {
     return (
        <div className="flex items-center justify-center min-h-screen bg-background">
           <div className="flex items-center gap-2">
@@ -228,7 +242,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                   </DropdownMenu>
                 )}
             </header>
-            {conversationId ? (
+            {conversationId && user ? (
               <Chat conversationId={conversationId} user={user} onTitleUpdate={handleTitleUpdate} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center">

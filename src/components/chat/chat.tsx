@@ -1,7 +1,7 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle } from "@/lib/chat-service";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, Timestamp } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,22 +12,16 @@ import React, { useEffect, useRef, useState, useTransition } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateChatResponse } from "@/ai/flows/generate-chat-response";
+import type { User as FirebaseUser } from 'firebase/auth';
+
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  reactions?: { [key: string]: string[] }; // a reaction can be voted by multiple userIds
+  reactions?: { [key: string]: string[] };
   replyTo?: string;
-}
-
-// Mock user type
-interface FirebaseUser {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
 }
 
 export function Chat({ 
@@ -36,7 +30,7 @@ export function Chat({
   onTitleUpdate 
 }: { 
   conversationId: string; 
-  user: FirebaseUser | null;
+  user: FirebaseUser;
   onTitleUpdate: (id: string, title: string) => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -54,13 +48,24 @@ export function Chat({
   };
 
   useEffect(() => {
-    if (!user || !conversationId) return;
+    if (!conversationId) return;
     setLoading(true);
-    getMessages(user.uid, conversationId).then((history) => {
-      setMessages(history);
-      setLoading(false);
-    });
-  }, [conversationId, user]);
+    getMessages(conversationId)
+        .then((history) => {
+            const serializableHistory = history.map(msg => ({
+                ...msg,
+                timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
+            }));
+            setMessages(serializableHistory);
+        })
+        .catch(err => {
+            console.error("Error fetching messages: ", err);
+            toast({ title: "Error", description: "Failed to load message history.", variant: 'destructive'})
+        })
+        .finally(() => {
+            setLoading(false);
+        });
+  }, [conversationId, toast]);
 
   useEffect(() => {
     scrollToBottom();
@@ -76,44 +81,52 @@ export function Chat({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const userInput = input.trim();
-    if (!userInput || isPending || !user) return;
+    if (!userInput || isPending) return;
     
     const isFirstMessage = messages.length === 0;
 
-    const newUserMessage: Message = {
-      id: crypto.randomUUID(),
+    const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
       role: "user",
       content: userInput,
-      timestamp: new Date(),
-      ...(replyingTo && { replyTo: replyTo.id }),
+      ...(replyingTo && { replyTo: replyingTo.id }),
     };
-
-    setMessages((prev) => [...prev, newUserMessage]);
+    
+    // Optimistic update for user message
+    const tempUserMessage: Message = {
+      ...(newUserMessage as Message),
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, tempUserMessage]);
     setInput("");
     setReplyingTo(null);
     
     startTransition(async () => {
       try {
-        await addMessage(user.uid, conversationId, newUserMessage);
+        await addMessage(conversationId, newUserMessage);
 
         const aiResponse = await generateChatResponse({ userInput, personaInformation: `The user's name is ${user.displayName}.` });
 
         if (aiResponse.aiResponse) {
-          const aiMessage: Message = {
-            id: crypto.randomUUID(),
+          const aiMessage: Omit<Message, 'id' | 'timestamp'> = {
             role: "assistant",
             content: aiResponse.aiResponse,
-            timestamp: new Date(),
           };
-          setMessages((prev) => [...prev, aiMessage]);
-          await addMessage(user.uid, conversationId, aiMessage);
+          await addMessage(conversationId, aiMessage);
           
           if (isFirstMessage) {
-            const summary = await updateConversationTitle(user.uid, conversationId, userInput);
+            const summary = await updateConversationTitle(conversationId, userInput);
             if (summary) {
               onTitleUpdate(conversationId, summary);
             }
           }
+           const tempAiMessage: Message = {
+            ...(aiMessage as Message),
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+          }
+          setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, tempAiMessage]);
+
         } else {
           throw new Error('Failed to get AI response');
         }
@@ -124,9 +137,8 @@ export function Chat({
           title: "Error",
           description: "Failed to send message. Please try again.",
         });
-        setMessages((prev) =>
-          prev.filter((msg) => msg.id !== newUserMessage.id)
-        );
+        // Revert optimistic update
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessage.id));
       }
     });
   };
@@ -152,11 +164,17 @@ export function Chat({
 
     // Persist change
     try {
-      await updateMessageReaction(user.uid, conversationId, messageId, reaction);
+      await updateMessageReaction(conversationId, messageId, reaction, user.uid);
     } catch(e) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to save reaction.' });
       // Revert optimistic update if API call fails
-      getMessages(user.uid, conversationId).then(setMessages);
+      getMessages(conversationId).then(history => {
+          const serializableHistory = history.map(msg => ({
+              ...msg,
+              timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
+          }));
+          setMessages(serializableHistory);
+      });
     }
   };
   
@@ -266,7 +284,7 @@ export function Chat({
                 className="text-sm bg-secondary p-2 rounded-t-md flex justify-between items-center"
             >
                 <div>
-                  <p className="font-semibold text-secondary-foreground">Replying to {replyingTo.role === 'user' ? 'yourself' : 'BlinkAi'}</p>
+                  <p className="font-semibold text-secondary-foreground">Replying to {replyingTo.role === 'user' ? user.displayName : 'BlinkAi'}</p>
                   <p className="text-muted-foreground truncate max-w-xs md:max-w-md">"{replyingTo.content}"</p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setReplyingTo(null)} className="h-6 w-6">

@@ -1,15 +1,29 @@
 
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  orderBy,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  Timestamp,
+  getDoc,
+} from 'firebase/firestore';
 import { summarizeConversation } from '@/ai/flows/summarize-conversation';
 
-// Use a simple Date object for mocking Timestamp
-type Timestamp = Date;
+// Re-export Timestamp for use in components
+export { Timestamp };
 
-interface Message {
+export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Timestamp;
-  reactions?: { [key: string]: string[] };
+  reactions?: { [key:string]: string[] };
   replyTo?: string;
 }
 
@@ -17,77 +31,61 @@ export interface Conversation {
   id: string;
   title: string;
   lastUpdated: Timestamp;
+  userId: string;
 }
-
-// Helper to get data from localStorage
-const getLocalStorage = (key: string, defaultValue: any) => {
-  if (typeof window === 'undefined') return defaultValue;
-  const value = localStorage.getItem(key);
-  return value ? JSON.parse(value) : defaultValue;
-};
-
-// Helper to set data in localStorage
-const setLocalStorage = (key: string, value: any) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(key, JSON.stringify(value));
-};
-
 
 // Get all conversations for a user
 export async function getConversations(userId: string): Promise<Conversation[]> {
-  const conversations = getLocalStorage(`conversations_${userId}`, []);
-  // Sort by lastUpdated descending
-  return conversations.sort((a: Conversation, b: Conversation) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
+  if (!db) throw new Error("Firestore is not initialized.");
+  const conversationsRef = collection(db, 'conversations');
+  const q = query(conversationsRef, where('userId', '==', userId), orderBy('lastUpdated', 'desc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
 }
 
 // Get all messages for a conversation
-export async function getMessages(userId: string, conversationId: string): Promise<Message[]> {
-  const messages = getLocalStorage(`messages_${conversationId}`, []);
-  return messages.map((msg: any) => ({
-    ...msg,
-    timestamp: new Date(msg.timestamp),
-  }));
+export async function getMessages(conversationId: string): Promise<Message[]> {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+  const q = query(messagesRef, orderBy('timestamp', 'asc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
 }
 
 // Add a new message to a conversation
-export async function addMessage(userId: string, conversationId: string, message: Message) {
-  const messages = await getMessages(userId, conversationId);
-  messages.push(message);
-  setLocalStorage(`messages_${conversationId}`, messages);
-
-  // Update conversation's lastUpdated timestamp
-  const conversations = await getConversations(userId);
-  const convoIndex = conversations.findIndex(c => c.id === conversationId);
-  if (convoIndex > -1) {
-    conversations[convoIndex].lastUpdated = new Date();
-    setLocalStorage(`conversations_${userId}`, conversations);
-  }
+export async function addMessage(conversationId: string, message: Omit<Message, 'id' | 'timestamp' | 'reactions'>) {
+    if (!db) throw new Error("Firestore is not initialized.");
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const conversationRef = doc(db, 'conversations', conversationId);
+    
+    await addDoc(messagesRef, { ...message, timestamp: serverTimestamp() });
+    await updateDoc(conversationRef, { lastUpdated: serverTimestamp() });
 }
 
 // Start a new conversation
 export async function startNewConversation(userId: string): Promise<Conversation> {
-  const conversations = await getConversations(userId);
-  const newConversation: Conversation = {
-    id: `convo_${crypto.randomUUID()}`,
+  if (!db) throw new Error("Firestore is not initialized.");
+  const conversationsRef = collection(db, 'conversations');
+  const newConversation = {
     title: 'New Chat',
-    lastUpdated: new Date(),
+    userId: userId,
+    lastUpdated: serverTimestamp(),
   };
-  conversations.unshift(newConversation);
-  setLocalStorage(`conversations_${userId}`, conversations);
-  return newConversation;
+  const docRef = await addDoc(conversationsRef, newConversation);
+  
+  const newDoc = await getDoc(docRef);
+
+  return { id: newDoc.id, ...newDoc.data() } as Conversation;
 }
 
 // Update conversation title based on summary
-export async function updateConversationTitle(userId: string, conversationId: string, firstUserInput: string): Promise<string | null> {
+export async function updateConversationTitle(conversationId: string, firstUserInput: string): Promise<string | null> {
+    if (!db) throw new Error("Firestore is not initialized.");
     try {
         const result = await summarizeConversation({ conversation: firstUserInput });
         if (result.summary) {
-            const conversations = await getConversations(userId);
-            const convoIndex = conversations.findIndex(c => c.id === conversationId);
-            if (convoIndex > -1) {
-              conversations[convoIndex].title = result.summary;
-              setLocalStorage(`conversations_${userId}`, conversations);
-            }
+            const conversationRef = doc(db, 'conversations', conversationId);
+            await updateDoc(conversationRef, { title: result.summary });
             return result.summary;
         }
         return null;
@@ -97,23 +95,23 @@ export async function updateConversationTitle(userId: string, conversationId: st
     }
 }
 
-
 // Update message reaction
-export async function updateMessageReaction(userId: string, conversationId: string, messageId: string, reaction: string) {
-  const messages = await getMessages(userId, conversationId);
-  const messageIndex = messages.findIndex(m => m.id === messageId);
+export async function updateMessageReaction(conversationId: string, messageId: string, reaction: string, userId: string) {
+  if (!db) throw new Error("Firestore is not initialized.");
+  const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+  const messageSnap = await getDoc(messageRef);
 
-  if (messageIndex > -1) {
-    const msg = messages[messageIndex];
-    const reactions = msg.reactions || {};
+  if (messageSnap.exists()) {
+    const msgData = messageSnap.data();
+    const reactions = msgData.reactions || {};
     const userList: string[] = reactions[reaction] || [];
     
     if (userList.includes(userId)) {
-      reactions[reaction] = userList.filter((uid: string) => uid !== userId);
+      reactions[reaction] = userList.filter(uid => uid !== userId);
     } else {
       reactions[reaction] = [...userList, userId];
     }
-    msg.reactions = reactions;
-    setLocalStorage(`messages_${conversationId}`, messages);
+    
+    await updateDoc(messageRef, { reactions });
   }
 }

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-
-const MOCK_USER_KEY = 'blinkai-user';
+import { auth, db } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 export function SignupForm() {
   const router = useRouter();
@@ -29,7 +31,7 @@ export function SignupForm() {
     className: '',
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const checkPasswordStrength = (pass: string) => {
     let score = 0;
@@ -45,23 +47,11 @@ export function SignupForm() {
     if (/[^A-Za-z0-9]/.test(pass)) score++;
 
     if (score < 3) {
-      setStrength({
-        value: 33,
-        text: 'Not Secure',
-        className: 'bg-destructive text-destructive-foreground',
-      });
+      setStrength({ value: 33, text: 'Not Secure', className: 'bg-destructive text-destructive-foreground' });
     } else if (score < 5) {
-      setStrength({
-        value: 66,
-        text: 'Medium',
-        className: 'bg-yellow-500 text-yellow-500',
-      });
+      setStrength({ value: 66, text: 'Medium', className: 'bg-yellow-500 text-yellow-500' });
     } else {
-      setStrength({
-        value: 100,
-        text: 'Strong',
-        className: 'bg-primary text-primary-foreground',
-      });
+      setStrength({ value: 100, text: 'Strong', className: 'bg-primary text-primary-foreground' });
     }
   };
 
@@ -71,26 +61,41 @@ export function SignupForm() {
     checkPasswordStrength(newPassword);
   };
   
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      setLoading(false);
-      return;
+        toast({ title: "Weak Password", description: "Password must be at least 8 characters.", variant: "destructive"});
+        setLoading(false);
+        return;
+    }
+    
+    if (!auth || !db) {
+        toast({ title: 'Error', description: 'Services not available.', variant: 'destructive' });
+        setLoading(false);
+        return;
     }
 
-    const mockUser = {
-      uid: `mock_${email}`,
-      displayName: name,
-      email: email,
-      photoURL: null,
-    };
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser));
-    router.push('/chat');
+      await updateProfile(user, { displayName: name });
+      
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        displayName: name,
+        email: user.email,
+        photoURL: user.photoURL,
+      });
+
+      router.push('/chat');
+    } catch (error: any) {
+        toast({ title: 'Sign-up Failed', description: error.message, variant: 'destructive' });
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -132,9 +137,6 @@ export function SignupForm() {
                 {strength.text}
               </p>
             </div>
-          )}
-           {error && (
-            <p className="text-sm text-destructive text-center">{error}</p>
           )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Creating Account...' : 'Create Account'}

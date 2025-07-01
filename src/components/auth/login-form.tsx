@@ -15,52 +15,53 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo, GoogleIcon } from '@/components/icons';
-
-const MOCK_USER_KEY = 'blinkai-user';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
-    // In a real app, you'd validate this. Here, we'll just log in.
-    if (!email || !password) {
-      setError("Please enter email and password.");
+    if (!auth) {
+      toast({ title: 'Error', description: 'Authentication service is not available.', variant: 'destructive' });
       setLoading(false);
       return;
     }
 
-    const mockUser = {
-      uid: `mock_${email}`,
-      displayName: email.split('@')[0],
-      email: email,
-      photoURL: null,
-    };
-
-    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser));
-    router.push('/chat');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push('/chat');
+    } catch (error: any) {
+      toast({ title: 'Login Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
   
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    setError(null);
-    
-    const mockUser = {
-      uid: 'mock_google_user',
-      displayName: 'Google User',
-      email: 'google.user@example.com',
-      photoURL: `https://placehold.co/100x100.png`,
-    };
-
-    localStorage.setItem(MOCK_USER_KEY, JSON.stringify(mockUser));
-    router.push('/chat');
+    if (!auth) {
+      toast({ title: 'Error', description: 'Authentication service is not available.', variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      router.push('/chat');
+    } catch (error: any) {
+      toast({ title: 'Google Sign-In Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,9 +85,6 @@ export function LoginForm() {
             <Label htmlFor="password">Password</Label>
             <Input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
-          {error && (
-            <p className="text-sm text-destructive text-center">{error}</p>
-          )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Signing In...' : 'Sign In'}
           </Button>

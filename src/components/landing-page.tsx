@@ -4,35 +4,31 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Logo } from '@/components/icons';
-import { Lightbulb, MessageSquareHeart, Zap, Bot, User, LogOut } from 'lucide-react';
+import { Lightbulb, MessageSquareHeart, Zap, Bot, User as UserIcon, LogOut } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { logout } from '@/app/auth/actions';
-
-const MOCK_USER_KEY = 'blinkai-user';
-
-interface FirebaseUser {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-}
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 
 export function LandingPage() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem(MOCK_USER_KEY);
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    if (!auth) {
+        setLoading(false);
+        return;
     }
-    setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem(MOCK_USER_KEY);
-    setUser(null);
-    logout();
+  const handleLogout = async () => {
+    if (auth) {
+      await signOut(auth);
+    }
   };
 
   return (
@@ -43,27 +39,25 @@ export function LandingPage() {
           <span className="text-xl font-bold">BlinkAi</span>
         </Link>
         <nav className="flex items-center gap-4">
-          {!loading && (
-            user ? (
-              <>
-                <Button variant="ghost" onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </Button>
-                <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
-                  <Link href="/chat">Go to Chat</Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" asChild>
-                  <Link href="/login">Sign In</Link>
-                </Button>
-                <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
-                  <Link href="/chat">Get Started</Link>
-                </Button>
-              </>
-            )
+          {loading ? null : user ? (
+            <>
+              <Button variant="ghost" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </Button>
+              <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
+                <Link href="/chat">Go to Chat</Link>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" asChild>
+                <Link href="/login">Sign In</Link>
+              </Button>
+              <Button asChild className="bg-gradient-to-r from-primary to-blue-500 hover:from-primary/90 hover:to-blue-600 text-primary-foreground">
+                <Link href="/chat">Get Started</Link>
+              </Button>
+            </>
           )}
         </nav>
       </header>
@@ -91,7 +85,7 @@ export function LandingPage() {
                     <p className="text-sm">Can you help me brainstorm ideas for a new project?</p>
                   </div>
                    <div className="w-8 h-8 border shadow-sm rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5" />
+                      <UserIcon className="w-5 h-5" />
                     </div>
                 </div>
                 <div className="flex items-start gap-4">
@@ -109,7 +103,7 @@ export function LandingPage() {
                     <p className="text-sm">Haha, the cat translator sounds amazing. Let&apos;s go with that! How would we start?</p>
                   </div>
                    <div className="w-8 h-8 border shadow-sm rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5" />
+                      <UserIcon className="w-5 h-5" />
                     </div>
                 </div>
                 <div className="flex items-start gap-4">
