@@ -2,7 +2,6 @@
 "use client";
 import type { Metadata } from 'next';
 import './globals.css';
-import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 import { Toaster } from "@/components/ui/toaster";
@@ -12,10 +11,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -29,7 +24,7 @@ export default function RootLayout({
       </head>
       <body className={cn('font-body antialiased')}>
         {children}
-        {mounted && <Toaster />}
+        <Toaster />
       </body>
     </html>
   );
