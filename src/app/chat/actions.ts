@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { summarizeConversation } from '@/ai/flows/summarize-conversation';
 import {
   collection,
@@ -12,8 +12,9 @@ import {
   orderBy,
   getDocs,
   Timestamp,
-  where,
-  limit,
+  setDoc,
+  updateDoc,
+  getDoc,
 } from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
 
@@ -56,14 +57,14 @@ export async function getMessages(userId: string, conversationId: string): Promi
 }
 
 // Add a new message to a conversation
-export async function addMessage(userId: string, conversationId: string, message: Omit<Message, 'timestamp'> & { timestamp: Date }) {
+export async function addMessage(userId: string, conversationId: string, message: Message) {
   const { id, ...messageData } = message;
-  const messageRef = doc(db, `users/${userId}/conversations/${conversationId}/messages/${id}`);
+  const messageRef = doc(db, `users/${userId}/conversations/${conversationId}/messages`, id);
   const conversationRef = doc(db, `users/${userId}/conversations/${conversationId}`);
   
   await Promise.all([
-    doc(messageRef).set({ ...messageData, timestamp: Timestamp.fromDate(message.timestamp) }),
-    doc(conversationRef).update({ lastUpdated: serverTimestamp() })
+    setDoc(messageRef, { ...messageData, timestamp: Timestamp.fromDate(message.timestamp) }),
+    updateDoc(conversationRef, { lastUpdated: serverTimestamp() })
   ]);
 }
 
@@ -84,7 +85,7 @@ export async function updateConversationTitle(userId: string, conversationId: st
         const result = await summarizeConversation({ conversation: firstUserInput });
         if (result.summary) {
             const conversationRef = doc(db, `users/${userId}/conversations/${conversationId}`);
-            await doc(conversationRef).update({ title: result.summary });
+            await updateDoc(conversationRef, { title: result.summary });
             revalidatePath('/chat');
             revalidatePath(`/chat/${conversationId}`);
         }
@@ -97,7 +98,7 @@ export async function updateConversationTitle(userId: string, conversationId: st
 // Update message reaction
 export async function updateMessageReaction(userId: string, conversationId: string, messageId: string, reaction: string) {
   const messageRef = doc(db, `users/${userId}/conversations/${conversationId}/messages`, messageId);
-  const docSnap = await doc(messageRef).get();
+  const docSnap = await getDoc(messageRef);
 
   if (docSnap.exists()) {
     const messageData = docSnap.data();
@@ -109,6 +110,6 @@ export async function updateMessageReaction(userId: string, conversationId: stri
     } else {
       reactions[reaction] = [...userList, userId];
     }
-    await doc(messageRef).update({ reactions });
+    await updateDoc(messageRef, { reactions });
   }
 }
