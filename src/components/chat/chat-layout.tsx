@@ -30,7 +30,7 @@ import {
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { logout } from '@/app/auth/actions';
-import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp } from '@/lib/chat-service';
+import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp, getUserProfile, UserProfile } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
@@ -44,7 +44,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -52,6 +51,7 @@ import { cn } from '@/lib/utils';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
@@ -67,11 +67,14 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       router.push('/login');
       return;
     }
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
+        const profile = await getUserProfile(user.uid);
+        setUserProfile(profile);
       } else {
         setUser(null);
+        setUserProfile(null);
         router.push('/login');
       }
       setLoadingAuth(false);
@@ -239,10 +242,10 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         <Sidebar>
           <SidebarHeader>
              <div className="flex items-center justify-between p-2">
-              <div className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2">
                 <Logo className="w-8 h-8 text-primary" />
                 <h1 className="text-xl font-semibold">BlinkAi</h1>
-              </div>
+              </Link>
               <div className="flex items-center gap-1">
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -296,7 +299,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 </div>
               </SidebarMenuItem>
               <SidebarSeparator />
-              <div className={cn("space-y-1", isTempChat && "opacity-50 pointer-events-none transition-opacity")}>
+              <div className={cn("space-y-1 transition-opacity", isTempChat && "opacity-50 pointer-events-none")}>
                 {loadingConversations ? (
                    <div className="p-2 space-y-2">
                       <SidebarMenuSkeleton showIcon />
@@ -362,11 +365,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                   </DropdownMenu>
                 )}
             </header>
-            {user ? (
+            {user && userProfile ? (
               <Chat 
                 key={conversationId}
                 conversationId={conversationId} 
                 user={user} 
+                userProfile={userProfile}
                 onTitleUpdate={handleTitleUpdate} 
                 setActiveConversations={setActiveConversations}
               />

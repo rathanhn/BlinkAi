@@ -36,7 +36,7 @@ const prompt = ai.definePrompt({
   name: 'summarizeConversationPrompt',
   input: {schema: SummarizeConversationInputSchema},
   output: {schema: SummarizeConversationOutputSchema},
-  prompt: `Create a short, concise title (4 words maximum) for the following conversation. The title should capture the main topic of the conversation. Do not use quotes in the title.
+  prompt: `Your task is to create a very short, concise title for the following conversation. The title must be a maximum of 4 words and should summarize the main topic. For example, if the conversation is about planning a trip to Japan, a good title would be "Japan Trip Planning". Do not use quotation marks in the title.
 
 Conversation:
 {{{conversation}}}

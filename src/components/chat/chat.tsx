@@ -1,7 +1,7 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp } from "@/lib/chat-service";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp, UserProfile } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateChatResponse } from "@/ai/flows/generate-chat-response";
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from "@/components/icons";
+import { CodeBlock } from "./code-block";
 
 interface Message {
   id: string;
@@ -26,11 +27,13 @@ interface Message {
 
 export function Chat({ 
   conversationId, 
-  user, 
+  user,
+  userProfile,
   onTitleUpdate,
 }: { 
   conversationId?: string; 
   user: FirebaseUser;
+  userProfile: UserProfile;
   onTitleUpdate: (id: string, title: string) => void;
   setActiveConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
 }) {
@@ -109,14 +112,17 @@ export function Chat({
         const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
           role: "user",
           content: userInput,
-          ...(replyingTo && { replyTo: replyingTo.id }),
+          ...(replyingTo && { replyTo: replyTo.id }),
         };
 
         if (currentConvoId) {
             await addMessage(currentConvoId, newUserMessage);
         }
 
-        const aiResponse = await generateChatResponse({ userInput, personaInformation: `The user's name is ${user.displayName}.` });
+        const personaInfo = `The user's name is ${userProfile.displayName}.
+        ${userProfile.persona ? `\nCustom Persona Instructions:\n${userProfile.persona}` : ''}`;
+        
+        const aiResponse = await generateChatResponse({ userInput, personaInformation: personaInfo });
 
         if (aiResponse.aiResponse) {
           const aiMessage: Omit<Message, 'id' | 'timestamp'> = {
@@ -194,6 +200,18 @@ export function Chat({
     return messages.find(m => m.id === replyToId);
   }
 
+  const renderMessageContent = (content: string) => {
+    const parts = content.split(/(```[\s\S]*?```)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('```')) {
+        const codeBlock = part.replace(/^```(\w*)\n?|```$/g, '$1');
+        const language = part.match(/^```(\w*)/)?.[1] || '';
+        return <CodeBlock key={index} code={codeBlock} language={language} />;
+      }
+      return part ? <p key={index} className="whitespace-pre-wrap">{part}</p> : null;
+    });
+  };
+
   if (loading) {
      return (
        <div className="flex items-center justify-center h-full">
@@ -244,14 +262,14 @@ export function Chat({
                     )}
                     <div
                       className={cn(
-                        "rounded-lg p-3 shadow-sm",
+                        "rounded-lg shadow-sm text-left w-full",
                         message.role === "user"
-                          ? "bg-gradient-to-br from-primary to-blue-500 text-primary-foreground"
+                          ? "bg-gradient-to-br from-primary to-blue-500 text-primary-foreground p-3"
                           : "bg-card",
                         message.replyTo && getReplyingToMessage(message.replyTo) && "rounded-t-none"
                       )}
                     >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      {renderMessageContent(message.content)}
                     </div>
                     <div className={cn(
                       "mt-1 flex gap-1 transition-opacity opacity-0 group-hover:opacity-100",

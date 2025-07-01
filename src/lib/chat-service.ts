@@ -37,6 +37,26 @@ export interface Conversation {
   archived?: boolean;
 }
 
+export interface UserProfile {
+    uid: string;
+    displayName: string;
+    email: string;
+    photoURL?: string;
+    persona?: string;
+}
+
+
+// Get a user's profile from Firestore
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+    if (!db) throw new Error("Firestore is not initialized.");
+    const userDocRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+        return userDoc.data() as UserProfile;
+    }
+    return null;
+}
+
 // Get all non-archived conversations for a user
 export async function getConversations(userId: string): Promise<Conversation[]> {
   if (!db) throw new Error("Firestore is not initialized.");
@@ -153,9 +173,6 @@ export async function deleteConversation(conversationId: string) {
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
 
-    // Firestore doesn't support deleting subcollections from the client SDK directly.
-    // A batched write is used here to delete messages. For very large conversations,
-    // this could hit limits. A Cloud Function would be a more robust solution for production.
     const messagesSnapshot = await getDocs(messagesRef);
     const batch = writeBatch(db);
     messagesSnapshot.docs.forEach(doc => {
@@ -163,6 +180,20 @@ export async function deleteConversation(conversationId: string) {
     });
     await batch.commit();
 
-    // Delete the conversation document itself
     await deleteDoc(conversationRef);
+}
+
+// Delete all conversations for a specific user
+export async function deleteAllConversationsForUser(userId: string) {
+    if (!db) throw new Error("Firestore is not initialized.");
+    
+    const conversationsRef = collection(db, 'conversations');
+    const q = query(conversationsRef, where('userId', '==', userId));
+    const querySnapshot = await getDocs(q);
+
+    // This can be a long-running operation. For production apps with many conversations,
+    // a Cloud Function would be a more robust solution.
+    for (const doc of querySnapshot.docs) {
+        await deleteConversation(doc.id);
+    }
 }
