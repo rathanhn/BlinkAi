@@ -26,7 +26,7 @@ if (typeof window !== 'undefined' && !getApps().length) {
       db = getFirestore(app);
       storage = getStorage(app);
     } else {
-      console.error("Firebase API key is missing. Please check your .env file.");
+      console.error("Firebase configuration is missing. Please check your .env file.");
     }
   } catch (e) {
     console.error("Firebase initialization error:", e);

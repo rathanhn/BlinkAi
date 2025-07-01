@@ -1,26 +1,31 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Users can read and write their own user document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     match /conversations/{conversationId} {
-      // Allow a user to get, update, or delete their own single conversation document.
-      allow get, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow reading a single conversation if the user owns it
+      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
 
-      // Allow a user to query the conversations collection.
-      // The client-side code MUST apply a where('userId', '==', request.auth.uid) filter for this to be secure.
-      // Your app's code already does this correctly.
-      allow list: if request.auth != null;
-
-      // Allow a user to create a new conversation for themself.
+      // Allow listing conversations but only when the query is for the user's own chats
+      allow list: if request.auth != null && request.query.resource.data.userId == request.auth.uid;
+      
+      // Allow creating a conversation if the userId is set to the user's own UID
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Allow updating a conversation (e.g., title) if the user owns it
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
     }
-
+    
     match /conversations/{conversationId}/messages/{messageId} {
-       // Allow users to read and write messages only within conversations they own.
-       allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+      // Allow reading/writing messages only if the user owns the parent conversation
+      allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
     }
   }
 }
