@@ -22,7 +22,7 @@ export default function RootLayout({
 }>) {
 
   return (
-    <html lang="en" suppressHydrationWarning className={cn('light', inter.variable)}>
+    <html lang="en" suppressHydrationWarning className={cn('dark', inter.variable)}>
       <body className={cn('font-body antialiased')}>
         {children}
         <Toaster />
