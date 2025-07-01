@@ -1,8 +1,8 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,10 +13,28 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const storage = getStorage(app);
-const db = getFirestore(app);
+
+let auth: Auth;
+let storage: FirebaseStorage;
+let db: Firestore;
+
+try {
+  auth = getAuth(app);
+  storage = getStorage(app);
+  db = getFirestore(app);
+} catch (e) {
+  // This can happen on the server if the environment variables are not set.
+  // In that case, we'll just log an error. The app will fail gracefully
+  // when trying to use these services, rather than crashing on startup.
+  console.error(
+    'Firebase initialization failed. Make sure your Firebase environment variables are set correctly in your .env file.',
+    e
+  );
+  auth = null as any;
+  storage = null as any;
+  db = null as any;
+}
+
 
 export { app, auth, storage, db };
