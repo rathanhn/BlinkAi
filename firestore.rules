@@ -1,31 +1,22 @@
 
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow users to read and write their own user document
+    // Users can only read/write their own user document
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth.uid == userId;
     }
 
+    // Conversations can only be accessed by their owner
     match /conversations/{conversationId} {
-      // Users can only read conversations that they own.
-      // This applies to both getting a single doc and querying a list.
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read, update: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth.uid == request.resource.data.userId;
 
-      // Users can only create conversations for themselves.
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // Users can only update their own conversations.
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      // Users cannot delete conversations (for now).
-      allow delete: if false;
-    }
-
-    // Allow users to read and write messages in conversations they own.
-    match /conversations/{conversationId}/messages/{messageId} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+      // Messages can only be accessed by the owner of the parent conversation
+      match /messages/{messageId} {
+        allow read, create, update: if get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+      }
     }
   }
 }
