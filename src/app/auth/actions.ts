@@ -57,6 +57,7 @@ export async function signupWithEmail(prevState: any, formData: FormData) {
     });
 
   } catch (error: any) {
+    console.error("Signup Error:", error);
     if (error.code === 'auth/email-already-in-use') {
       return { success: false, message: 'This email is already in use. Please try another.' };
     }
@@ -79,6 +80,7 @@ export async function loginWithEmail(prevState: any, formData: FormData) {
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (error: any) {
+    console.error("Login Error:", error);
     if (error.code === 'auth/invalid-credential') {
         return { success: false, message: "Invalid email or password. Please try again." };
     }
