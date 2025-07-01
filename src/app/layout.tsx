@@ -28,8 +28,8 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('font-body antialiased')}>
- {children}
- {mounted && <Toaster />}
+        {children}
+        {mounted && <Toaster />}
       </body>
     </html>
   );

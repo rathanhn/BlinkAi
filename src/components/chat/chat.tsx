@@ -98,7 +98,7 @@ export function Chat() {
                   className={cn(
                     "max-w-[75%] rounded-lg p-3 shadow-sm",
                     message.role === "user"
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-gradient-to-br from-purple-600 to-blue-500 text-primary-foreground"
                       : "bg-card"
                   )}
                 >
