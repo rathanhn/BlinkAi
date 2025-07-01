@@ -225,7 +225,7 @@ export function Chat({
 
   return (
     <div className={cn(
-        "flex flex-col h-full max-h-full",
+        "flex flex-col flex-1 overflow-hidden",
         isPending && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
       <div className="flex-1 overflow-hidden">
