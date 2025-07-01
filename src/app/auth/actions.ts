@@ -34,7 +34,6 @@ export async function signupWithEmail(prevState: any, formData: FormData) {
   const name = formData.get('name') as string;
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
-  const profilePicture = formData.get('profilePicture') as File;
 
   const parsed = signupTextSchema.safeParse({ name, email, password });
 
@@ -45,24 +44,16 @@ export async function signupWithEmail(prevState: any, formData: FormData) {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    let photoURL: string | undefined = undefined;
-
-    if (profilePicture && profilePicture.size > 0) {
-      const storageRef = ref(storage, `profilePictures/${user.uid}`);
-      await uploadBytes(storageRef, profilePicture);
-      photoURL = await getDownloadURL(storageRef);
-    }
     
     await updateProfile(user, { 
       displayName: name,
-      photoURL: photoURL
     });
 
     await setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
       displayName: name,
       email: user.email,
-      photoURL: photoURL,
+      photoURL: null,
     });
 
   } catch (error: any) {
