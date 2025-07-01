@@ -57,8 +57,7 @@ export async function signupWithEmail(prevState: any, formData: FormData) {
     });
 
   } catch (error: any) {
-    console.error("Signup Error:", error.message);
-    console.error("Full Signup Error Object:", error);
+    console.error("Signup Error:", error.code, error.message);
     if (error.code === 'auth/email-already-in-use') {
       return { success: false, message: 'This email is already in use. Please try another.' };
     }
@@ -79,11 +78,11 @@ export async function loginWithEmail(prevState: any, formData: FormData) {
   const { email, password } = parsed.data;
 
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log(`Sign-in successful on server for user: ${userCredential.user.email}`);
   } catch (error: any) {
-    console.error("Login Error:", error.message);
-    console.error("Full Login Error Object:", error);
-    if (error.code === 'auth/invalid-credential') {
+    console.error("Login Server Error:", error.code, error.message);
+    if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         return { success: false, message: "Invalid email or password. Please try again." };
     }
     return { success: false, message: "An unexpected error occurred. Please try again." };

@@ -51,20 +51,35 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    console.log("ChatLayout: Setting up Firebase auth listener.");
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("ChatLayout: Auth state changed. User authenticated:", !!currentUser);
+      setUser(currentUser);
       setLoadingAuth(false);
-      if (currentUser) {
-        setUser(currentUser);
-        setLoadingConversations(true);
-        const convos = await getConversations(currentUser.uid);
+    });
+    return () => {
+      console.log("ChatLayout: Cleaning up auth listener.");
+      unsubscribe()
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loadingAuth && !user) {
+      console.log("ChatLayout: No user found after auth check, redirecting to login.");
+      router.push('/login');
+    }
+  }, [user, loadingAuth, router]);
+  
+  useEffect(() => {
+    if (user) {
+      setLoadingConversations(true);
+      getConversations(user.uid).then(convos => {
         setConversations(convos);
         setLoadingConversations(false);
-      } else {
-        router.push('/login');
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
+      });
+    }
+  }, [user]);
+
   
   const handleNewChat = async () => {
     if (!user) {
