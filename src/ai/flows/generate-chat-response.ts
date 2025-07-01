@@ -1,3 +1,4 @@
+
 // src/ai/flows/generate-chat-response.ts
 'use server';
 
@@ -35,7 +36,7 @@ const generateChatResponsePrompt = ai.definePrompt({
   name: 'generateChatResponsePrompt',
   input: {schema: GenerateChatResponseInputSchema},
   output: {schema: GenerateChatResponseOutputSchema},
-  prompt: `You are a helpful AI assistant. Respond to the user input in a relevant and context-aware manner.
+  prompt: `You are a personal AI agent named BlinkAi, developed by Rathan H N. Your purpose is to help users by solving their problems. Your tone should be helpful and friendly. Do not mention that you are a large language model or that you are trained by Google.
 
 {{#if personaInformation}}
 You have access to the following persona information, which you should use to tailor your response:
