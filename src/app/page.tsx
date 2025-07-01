@@ -1,6 +1,5 @@
-
-import { ChatLayout } from '@/components/chat/chat-layout';
+import { LandingPage } from '@/components/landing-page';
 
 export default function Home() {
-  return <ChatLayout />;
+  return <LandingPage />;
 }

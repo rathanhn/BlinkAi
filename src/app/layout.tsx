@@ -1,19 +1,22 @@
 // app/layout.tsx
+"use client";
 import type { Metadata } from 'next';
 import './globals.css';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Toaster } from "@/components/ui/toaster";
 
-export const metadata: Metadata = {
-  title: 'BlinkAi',
-  description: 'An intelligent AI chat assistant.',
-};
+import { Toaster } from "@/components/ui/toaster";
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -25,8 +28,8 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('font-body antialiased')}>
-        {children}
-        <Toaster />
+ {children}
+ {mounted && <Toaster />}
       </body>
     </html>
   );

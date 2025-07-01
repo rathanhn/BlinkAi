@@ -13,10 +13,11 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
-import { Plus } from 'lucide-react';
+import { Home, Plus } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
+import Link from 'next/link';
 
 export function ChatLayout() {
   const [chatKey, setChatKey] = useState<number | null>(null);
@@ -45,6 +46,14 @@ export function ChatLayout() {
                 <SidebarMenuButton onClick={startNewChat} className="w-full">
                   <Plus className="mr-2" />
                   New Chat
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild className="w-full">
+                  <Link href="/">
+                    <Home className="mr-2" />
+                    Home
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
