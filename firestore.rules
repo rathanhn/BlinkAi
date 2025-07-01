@@ -1,33 +1,52 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can only read/write their own user document.
+    // Helper function to check if a user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if the user owns the document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Rules for the 'users' collection
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Any authenticated user can create their own user document
+      allow create: if isAuthenticated() && isOwner(userId);
+      // Only the owner of the user document can read or update it
+      allow read, update: if isAuthenticated() && isOwner(userId);
+      // Users cannot delete their accounts through the client
+      allow delete: if false;
     }
 
-    // Rules for the top-level 'conversations' collection.
+    // Rules for the 'conversations' collection
     match /conversations/{conversationId} {
-      // Allow a user to LIST only their own conversations.
-      // This is the rule that fixes the "Error fetching conversations" issue.
-      allow list: if request.auth != null && request.query.where.userId == request.auth.uid;
+      // Authenticated users can read conversations they are a part of
+      allow get: if isAuthenticated() && isOwner(resource.data.userId);
+      // Authenticated users can query for the list of their own conversations
+      allow list: if isAuthenticated() && isOwner(request.query.where.userId.in[0]);
+      // Authenticated users can create new conversations
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+      // Only the owner can update the conversation (e.g., the title)
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      // Owners can delete their conversations
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
 
-      // Allow a user to GET a single one of their own conversations.
-      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
-
-      // Allow a logged-in user to CREATE a conversation for themselves.
-      // This is the rule that fixes the "New Chat" button.
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // Allow a user to UPDATE their own conversation (e.g., title, lastUpdated).
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-    }
-
-    // Rules for the 'messages' subcollection within a conversation.
-    match /conversations/{conversationId}/messages/{messageId} {
-      // Allow read/write to messages only if the user owns the parent conversation.
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+      // Rules for the 'messages' subcollection
+      match /messages/{messageId} {
+        // Anyone who can access the parent conversation can read messages
+        allow get, list: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId);
+        // Any user who can access the parent conversation can add messages
+        allow create: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId);
+        // Only the owner of the parent conversation can update messages (e.g., for reactions)
+        allow update: if isAuthenticated() && isOwner(get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId);
+        // Disallow deleting individual messages
+        allow delete: if false;
+      }
     }
   }
 }
