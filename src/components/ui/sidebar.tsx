@@ -68,6 +68,7 @@ const SidebarProvider = React.forwardRef<
     },
     ref
   ) => {
+    const [mounted, setMounted] = React.useState(false)
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
 
@@ -89,6 +90,12 @@ const SidebarProvider = React.forwardRef<
     )
 
     React.useEffect(() => {
+      setMounted(true)
+    }, [])
+
+    React.useEffect(() => {
+      if (!mounted) return
+
       const cookieValue = document.cookie
         .split("; ")
         .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
@@ -103,13 +110,13 @@ const SidebarProvider = React.forwardRef<
         }
       }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [setOpenProp])
+    }, [mounted, setOpenProp])
 
     const toggleSidebar = React.useCallback(() => {
       return isMobile
         ? setOpenMobile((open) => !open)
-        : setOpen(!open)
-    }, [isMobile, setOpenMobile, open, setOpen])
+        : setOpen((open) => !open)
+    }, [isMobile, setOpenMobile, setOpen])
 
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
@@ -188,6 +195,15 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const [mounted, setMounted] = React.useState(false)
+
+    React.useEffect(() => {
+      setMounted(true)
+    }, [])
+
+    if (!mounted) {
+      return null
+    }
 
     if (collapsible === "none") {
       return (
