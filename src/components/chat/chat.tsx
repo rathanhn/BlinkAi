@@ -1,7 +1,8 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp, UserProfile } from "@/lib/chat-service";
+// Temporary chat messages are stored in RAM and not persisted to the database.
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, startNewConversation, type Conversation, Timestamp, UserProfile } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,6 +31,7 @@ interface Message {
 export function Chat({ 
   conversationId,
   isTempChat,
+
   user,
   userProfile,
   onTitleUpdate,
@@ -43,6 +45,7 @@ export function Chat({
   setActiveConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [tempMessages, setTempMessages] = useState<Message[]>([]); // State for temporary chat messages
   const [input, setInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
@@ -76,8 +79,8 @@ export function Chat({
   };
 
   useEffect(() => {
+    console.log('useEffect [conversationId, isTempChat, tempMessages]:', { isTempChat, conversationId, tempMessagesLength: tempMessages.length, messagesLength: messages.length });
     if (isTempChat) {
-        setMessages([]);
         setLoading(false);
         return;
     }
@@ -97,13 +100,20 @@ export function Chat({
             .finally(() => {
                 setLoading(false);
             });
-    } else {
+    } else if (!conversationId) {
+        // If not temp chat and no conversation ID, clear messages
+        setMessages([]);
         setLoading(false);
     }
-  }, [conversationId, isTempChat]);
+  }, [conversationId, isTempChat, tempMessages]); // Add tempMessages to dependencies
 
   useEffect(() => {
-    scrollToBottom();
+    console.log('useEffect [messages, loading]: Updating messages state for display or scrolling', { isTempChat, messagesLength: messages.length });
+    // Update messages state to reflect tempMessages when in a temporary chat
+    if (isTempChat) {
+      setMessages(tempMessages);
+    }
+    if (!loading) scrollToBottom();
   }, [messages]);
 
   useEffect(() => {
@@ -118,8 +128,8 @@ export function Chat({
     const userInput = input.trim();
     if (!userInput || isPending) return;
 
+    console.log('handleSubmit: Before state updates', { isTempChat, tempMessagesLength: tempMessages.length, messagesLength: messages.length });
     const isFirstMessage = messages.length === 0;
-
     // Optimistically add user message to UI for responsiveness
     const tempUserMessage: Message = {
       id: crypto.randomUUID(),
@@ -129,15 +139,29 @@ export function Chat({
       ...(replyingTo && { replyTo: replyingTo.id }),
     };
     
-    setMessages((prev) => [...prev, tempUserMessage]);
-    setInput("");
-    setReplyingTo(null);
-
+    console.log('handleSubmit: Optimistically adding user message to tempMessages (if temp chat)', { isTempChat, messageContent: tempUserMessage.content });
     startTransition(async () => {
-      try {
+ try {
+ if (isTempChat && isFirstMessage) {
+ // If it's the first message in a temporary chat, create a new permanent conversation
+ console.log('handleSubmit: Starting new permanent conversation from temp chat');
+ const newConversation = await startNewConversation(user.uid, userInput);
+ router.replace(`/chat/${newConversation.id}`);
+ // Do not proceed with optimistic updates and AI response in this transition
+ // The useEffect for conversationId will handle loading the new chat
+ return;
+ }
+ // Add the optimistic user message to the state used for display
+        const updateState = isTempChat ? setTempMessages : setMessages;
+        updateState(prev => [...prev, tempUserMessage]);
         const personaInfo = `The user's name is ${userProfile.displayName}.
         ${userProfile.persona ? `\nCustom Persona Instructions:\n${userProfile.persona}` : ''}`;
-        
+
+        console.log('handleSubmit: Optimistically adding user message to display state (messages)', { messageContent: tempUserMessage.content });
+        // Add the optimistic user message to the display state (messages)
+        setMessages(prev => [...prev, tempUserMessage]);
+        setInput("");
+        setReplyingTo(null);
         const aiResponse = await generateChatResponse({ userInput, personaInformation: personaInfo });
 
         if (!aiResponse.aiResponse) {
@@ -146,27 +170,30 @@ export function Chat({
 
         // Optimistically add AI response to UI
         const tempAiMessage: Message = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: aiResponse.aiResponse,
-          timestamp: new Date(),
+ id: crypto.randomUUID(),
+ role: "assistant",
+ content: aiResponse.aiResponse,
+ timestamp: new Date(),
         };
+        console.log('handleSubmit: Optimistically adding AI message to display state (messages)', { messageContent: tempAiMessage.content });
         setMessages((prev) => [...prev, tempAiMessage]);
 
         // If it's a permanent chat, save messages to Firestore in the background.
         if (!isTempChat && conversationId) {
+            // The optimistic user message added earlier was just for immediate UI update.
+            // Now we'll add the actual message to Firestore.
           const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
             role: "user",
             content: userInput,
             ...(replyingTo && { replyTo: replyingTo.id }),
           };
-          await addMessage(conversationId, newUserMessage);
+          const userMessageRef = await addMessage(conversationId, newUserMessage);
 
           const aiMessage: Omit<Message, 'id' | 'timestamp'> = {
             role: "assistant",
             content: aiResponse.aiResponse,
           };
-          await addMessage(conversationId, aiMessage);
+          const aiMessageRef = await addMessage(conversationId, aiMessage);
           
           // If it was the first message in a new permanent chat, summarize for title
           if (isFirstMessage) {
@@ -175,18 +202,29 @@ export function Chat({
                 onTitleUpdate(conversationId, summary);
               }
           }
+        } else if (isTempChat) {
+ console.log('handleSubmit: Updating tempMessages with AI response', { messageContent: tempAiMessage.content });
+ // If it's a temporary chat, update the local tempMessages state with the AI response.
+ setTempMessages(prev => [...prev, tempAiMessage]);
         }
       } catch (error) {
         handleError(error, 'Failed to send message');
         // On failure, remove the optimistic user message
-        setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessage.id));
+ setMessages(prev => prev.filter(msg => msg.id !== tempUserMessage.id));
+ console.log('handleSubmit: Removing optimistic user message from tempMessages (if temp chat) on error', { isTempChat });
+ if (isTempChat) {
+ setTempMessages(prev => prev.filter(msg => msg.id !== tempUserMessage.id));
+ }
       }
     });
   };
 
   const handleReaction = async (messageId: string, reaction: string) => {
     if (!user || !conversationId) return;
+    console.log('handleReaction:', { isTempChat, messageId, reaction });
     
+    if (isTempChat) return; // Do nothing for temporary chats
+
     const newMessages = messages.map(msg => {
       if (msg.id === messageId) {
         const newReactions = { ...(msg.reactions || {}) };
@@ -219,7 +257,7 @@ export function Chat({
     }
   };
   
-  const getReplyingToMessage = (replyToId: string) => {
+  const getReplyingToMessage = (replyToId: string | undefined) => {
     return messages.find(m => m.id === replyToId);
   }
 
@@ -249,7 +287,7 @@ export function Chat({
   return (
     <div className={cn(
         "flex flex-col flex-1 h-full",
-        isPending && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
+ isPending && !isTempChat && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
@@ -345,7 +383,7 @@ export function Chat({
       </div>
       <div className={cn(
           "p-4 border-t bg-card shrink-0",
-          isPending && "bg-transparent border-transparent"
+ isPending && !isTempChat && "bg-transparent border-transparent"
         )}>
         <AnimatePresence>
         {replyingTo && (

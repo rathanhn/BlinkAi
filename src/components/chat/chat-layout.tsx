@@ -16,7 +16,7 @@ import {
 import { Logo } from '@/components/icons';
 import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical, Megaphone, Shield } from 'lucide-react';
 import { Chat } from './chat';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/button';
 import Link from 'next/link';
 import { 
@@ -51,6 +51,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
+import { usePathname } from 'next/navigation';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -59,12 +60,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const initialLoadHandled = useRef(false);
   const router = useRouter();
   const { toast } = useToast();
+  const pathname = usePathname();
 
   const isTempChat = !conversationId;
-
 
   const handleError = (error: any, title: string) => {
     const errorMessage = error.message || 'An unknown error occurred.';
@@ -105,9 +106,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return () => unsubscribe();
   }, [router]);
   
-  // This effect ONLY loads data. It runs when the user logs in.
   useEffect(() => {
-    if (user) {
+    if (user && !initialLoadHandled.current) {
       setLoadingConversations(true);
       
       Promise.all([
@@ -117,26 +117,38 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
+
+          // After fetching, if we are on the base /chat path, redirect to the most recent chat.
+          if (!conversationId) {
+            const allConversations = [...activeConvos, ...archivedConvos];
+            if (allConversations.length > 0) {
+              const mostRecentConversation = allConversations.sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime())[0];
+              router.replace(`/chat/${mostRecentConversation.id}`);
+            }
+          }
       }).catch(err => {
           handleError(err, 'Could not fetch conversations');
       }).finally(() => {
           setLoadingConversations(false);
+          initialLoadHandled.current = true; // Mark initial load as handled
       });
+    } else if (user && initialLoadHandled.current) {
+        // If it's not the initial load, just refresh the conversation lists
+        setLoadingConversations(true);
+        Promise.all([
+            getConversations(user.uid),
+            getArchivedConversations(user.uid)
+        ]).then(([activeConvos, archivedConvos]) => {
+            const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
+            setActiveConversations(activeConvos.map(serialize) as any);
+            setArchivedConversations(archivedConvos.map(serialize) as any);
+        }).catch(err => {
+            handleError(err, 'Could not refresh conversations');
+        }).finally(() => {
+            setLoadingConversations(false);
+        });
     }
-  }, [user]);
-
-  // This effect ONLY handles the initial redirect.
-  useEffect(() => {
-    if (isInitialLoad && !loadingConversations && conversationId && activeConversations.length > 0) {
-      router.replace(`/chat/${activeConversations[0].id}`);
-    }
-    
-    // Once we have finished the first load, we don't want to run this again.
-    if (isInitialLoad && !loadingConversations) {
-        setIsInitialLoad(false);
-    }
-  }, [activeConversations, loadingConversations, conversationId, isInitialLoad, router]);
-
+  }, [user, conversationId, router]); // Dependency on conversationId ensures this runs on navigation
   
   const handleNewChat = async () => {
     if (!user) {
@@ -234,9 +246,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   const handleToggleTempChat = (checked: boolean) => {
     if (checked) {
- router.push('/chat');
+      const path = '/chat';
+      router.push(path);
     } else if (activeConversations.length > 0) {
-        router.push(`/chat/${activeConversations[0].id}`);
+      const mostRecentConversation = [...activeConversations, ...archivedConversations].sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime())[0];
+      const path = `/chat/${mostRecentConversation.id}`;
+      router.push(path);
     } else {
         router.push('/chat');
     }
