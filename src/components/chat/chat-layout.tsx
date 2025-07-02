@@ -51,7 +51,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
-import { SheetDescription, SheetTitle } from '../ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -410,12 +409,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         </Sidebar>
         <SidebarInset>
             <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-card px-4 md:hidden">
-                <SidebarTrigger>
-                    <div className="sr-only">
-                      <SheetTitle>Navigation Menu</SheetTitle>
-                      <SheetDescription>A list of your conversations and actions.</SheetDescription>
-                    </div>
-                </SidebarTrigger>
+                <SidebarTrigger />
                  <div className="flex-1" />
                 {user && (
                    <DropdownMenu>
