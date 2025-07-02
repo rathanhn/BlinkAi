@@ -30,7 +30,7 @@ import {
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { logout } from '@/app/auth/actions';
-import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp, getUserProfile, UserProfile } from '@/lib/chat-service';
+import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp, getUserProfile, UserProfile, unarchiveAllConversationsForUser, deleteAllConversationsForUser } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { SheetTitle } from '@/components/ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -161,15 +162,16 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         toast({ title: "Conversation Deleted" });
 
         if (conversationId === convoId) {
+            // Find the most recently updated conversation among the remaining ones
             const allRemainingConversations = [...newActive, ...newArchived].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
             if (allRemainingConversations.length > 0) {
                 router.push(`/chat/${allRemainingConversations[0].id}`);
             } else {
-                router.push('/chat');
+                router.push('/chat'); // Fallback to temp chat if no conversations are left
             }
         }
     } catch (error) {
-        console.error("[ACTION FAILED: handleDelete]:", error);
+        console.error("[CLIENT ACTION FAILED: handleDelete]:", error);
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
         toast({ title: 'Error', description: `Could not delete conversation: ${errorMessage}`, variant: 'destructive' });
     }
@@ -201,7 +203,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               router.push(`/chat/${convo.id}`);
           }
       } catch (error) {
-          console.error("[ACTION FAILED: handleArchiveToggle]:", error);
+          console.error("[CLIENT ACTION FAILED: handleArchiveToggle]:", error);
           const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
           toast({ title: 'Error', description: `Could not update conversation: ${errorMessage}`, variant: 'destructive' });
       }
