@@ -52,6 +52,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
+import { SheetTitle } from '../ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -104,17 +105,21 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return () => unsubscribe();
   }, [router]);
   
+  // This effect should only run once when the user logs in.
   useEffect(() => {
     if (user) {
       setLoadingConversations(true);
-      const activeQuery = getConversations(user.uid);
-      const archivedQuery = getArchivedConversations(user.uid);
-
-      Promise.all([activeQuery, archivedQuery]).then(([activeConvos, archivedConvos]) => {
+      // Fetch all conversations
+      Promise.all([
+        getConversations(user.uid),
+        getArchivedConversations(user.uid)
+      ]).then(([activeConvos, archivedConvos]) => {
           const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
 
+          // This check is now safe because this effect only runs once on user load.
+          // It redirects if the app loads on the base URL without a specific chat open.
           if (!conversationId && activeConvos.length > 0) {
             router.replace(`/chat/${activeConvos[0].id}`);
           }
@@ -125,7 +130,10 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           setLoadingConversations(false);
       });
     }
-  }, [user, conversationId, router]);
+  // We intentionally only run this when the user object changes.
+  // Subsequent state updates are handled by the action handlers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   
   const handleNewChat = async () => {
@@ -181,11 +189,16 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         
         toast({ title: "Conversation Deleted" });
 
+        // If we deleted the chat we are currently on
         if (conversationId === convoId) {
+            // Combine and sort all remaining chats to find the most recent one
             const allRemainingConversations = [...newActive, ...newArchived].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
+            
             if (allRemainingConversations.length > 0) {
+                // Navigate to the most recent remaining conversation
                 router.push(`/chat/${allRemainingConversations[0].id}`);
             } else {
+                // If no chats are left, go to the temporary chat screen
                 router.push('/chat');
             }
         }
@@ -477,3 +490,5 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     </SidebarProvider>
   );
 }
+
+    
