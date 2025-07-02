@@ -8,7 +8,5 @@ export default async function ChatPage({ params }: { params: { conversationId?: 
   // When the route is /chat/123, conversationId will be ['123']. We take the first element.
   const conversationId = awaitedParams.conversationId?.[0];
   
-  // The key attribute has been removed to prevent the component from remounting
-  // on every navigation, which was the root cause of the toggle bug.
-  return <ChatLayout conversationId={conversationId} />;
+  return <ChatLayout key={conversationId} conversationId={conversationId} />;
 }
