@@ -8,6 +8,8 @@ export default async function ChatPage({ params }: { params: { conversationId?: 
   // When the route is /chat, conversationId will be undefined.
   // When the route is /chat/123, conversationId will be ['123']. We take the first element.
   const conversationId = awaitedParams.conversationId?.[0];
-  // The key prop is important to force a re-render of the layout when changing conversations.
-  return <ChatLayout key={conversationId} conversationId={conversationId} />;
+  
+  // The ChatLayout and its children are designed to react to changes in conversationId
+  // without needing a key to force a remount. Removing the key fixes the temp chat toggle issue.
+  return <ChatLayout conversationId={conversationId} />;
 }
