@@ -51,6 +51,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
+import { SheetDescription, SheetTitle } from '../ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -104,8 +105,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return () => unsubscribe();
   }, [router]);
   
-  // This effect runs once when the user logs in to load conversations
-  // and handle initial routing.
+  // This effect ONLY loads data. It runs when the user logs in.
   useEffect(() => {
     if (user) {
       setLoadingConversations(true);
@@ -117,17 +117,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
-
-          // This check redirects if the app loads on the base URL without a specific chat open,
-          // but only on the very first load. It prevents re-redirecting when the user
-          // intentionally navigates to the temporary chat.
-          if (isInitialLoad && !conversationId && activeConvos.length > 0) {
-            router.replace(`/chat/${activeConvos[0].id}`);
-          }
-          
-          // Mark the initial load as complete so the redirect doesn't happen again.
-          setIsInitialLoad(false);
-
       }).catch(err => {
           console.error("Error fetching conversations:", err);
           handleError(err, 'Could not fetch conversations');
@@ -135,9 +124,23 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           setLoadingConversations(false);
       });
     }
-  // We intentionally only run this when the user object changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // This effect ONLY handles the initial redirect.
+  useEffect(() => {
+    // It runs only when conversation data is first loaded.
+    // The check `!conversationId` ensures it only redirects from the base `/chat` page.
+    // `isInitialLoad` prevents it from running on subsequent navigations.
+    if (isInitialLoad && !loadingConversations && !conversationId && activeConversations.length > 0) {
+      router.replace(`/chat/${activeConversations[0].id}`);
+      setIsInitialLoad(false); // We've done the initial redirect, don't do it again.
+    }
+    
+    // If the page loads but there are no active conversations, we still need to mark the initial load as complete.
+    if (isInitialLoad && !loadingConversations) {
+        setIsInitialLoad(false);
+    }
+  }, [activeConversations, loadingConversations, conversationId, isInitialLoad, router]);
 
   
   const handleNewChat = async () => {
@@ -145,29 +148,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
       return;
     }
-    // If already in a temp chat, do nothing to prevent creating multiple new chats.
-    if (isTempChat) {
-      return;
-    }
-    try {
-      // Navigate to the base /chat route to create a new temp chat first.
-      router.push('/chat');
-      
-      // Then, in the background, create the new persistent conversation
-      const newConversation = await startNewConversation(user.uid);
-      const serializableConvo = {
-          ...newConversation,
-          lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
-      };
-      
-      // Add the new conversation to state and navigate to it.
-      // This will happen after the user has started typing in the temp chat.
-      setActiveConversations(prev => [serializableConvo as any, ...prev]);
-      router.push(`/chat/${newConversation.id}`);
-
-    } catch (error) {
-      handleError(error, 'Could not start new chat');
-    }
+    // Navigate to the base /chat route to create a new temp chat first.
+    router.push('/chat');
   };
 
   const handleTitleUpdate = (convoId: string, newTitle: string) => {
