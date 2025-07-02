@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  webpack: (config, { isServer }) => {
+    // Configure webpack for server-side bundles
+    if (isServer) {
+      config.externals.push('handlebars');
+    }
+
+    // Return the modified config
+    return config;
+  },
 };
 
 export default nextConfig;

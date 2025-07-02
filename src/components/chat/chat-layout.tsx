@@ -65,6 +65,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   const isTempChat = !conversationId;
 
+
   const handleError = (error: any, title: string) => {
     const errorMessage = error.message || 'An unknown error occurred.';
     toast({
@@ -126,7 +127,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   // This effect ONLY handles the initial redirect.
   useEffect(() => {
-    if (isInitialLoad && !loadingConversations && !conversationId && activeConversations.length > 0) {
+    if (isInitialLoad && !loadingConversations && conversationId && activeConversations.length > 0) {
       router.replace(`/chat/${activeConversations[0].id}`);
     }
     
@@ -179,7 +180,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
         setActiveConversations(newActive);
         setArchivedConversations(newArchived);
-        
+
         toast({ title: "Conversation Deleted" });
 
         // If we deleted the chat we are currently on
@@ -206,7 +207,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           if (shouldArchive) {
               const newActive = activeConversations.filter(c => c.id !== convo.id);
               const newArchived = [{...convo, archived: true }, ...archivedConversations].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
-
+ 
               setActiveConversations(newActive);
               setArchivedConversations(newArchived);
               toast({ title: "Conversation Archived" });
@@ -233,7 +234,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   const handleToggleTempChat = (checked: boolean) => {
     if (checked) {
-        router.push('/chat');
+ router.push('/chat');
     } else if (activeConversations.length > 0) {
         router.push(`/chat/${activeConversations[0].id}`);
     } else {
