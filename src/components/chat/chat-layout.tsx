@@ -15,7 +15,7 @@ import {
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
 import { Logo, VisuallyHidden } from '@/components/icons';
-import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical, Megaphone } from 'lucide-react';
+import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical, Megaphone, Shield } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -196,7 +196,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               }
           } else { // un-archive
               setArchivedConversations(prev => prev.filter(c => c.id !== convo.id));
-              setActiveConversations(prev => [{...convo, archived: false }, ...prev].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime()));
+              const newActiveConversations = [{...convo, archived: false }, ...activeConversations].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
+              setActiveConversations(newActiveConversations);
               toast({ title: "Conversation Restored" });
               router.push(`/chat/${convo.id}`);
           }
@@ -302,6 +303,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             <span>Feedback</span>
                           </Link>
                         </DropdownMenuItem>
+                       <DropdownMenuItem asChild>
+                          <Link href="/admin/feedback">
+                            <Shield className="mr-2 h-4 w-4" />
+                            <span>Admin</span>
+                          </Link>
+                        </DropdownMenuItem>
                        <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />
@@ -404,6 +411,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                           <Link href="/feedback">
                             <Megaphone className="mr-2 h-4 w-4" />
                             <span>Feedback</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href="/admin/feedback">
+                            <Shield className="mr-2 h-4 w-4" />
+                            <span>Admin</span>
                           </Link>
                         </DropdownMenuItem>
                        <DropdownMenuSeparator />

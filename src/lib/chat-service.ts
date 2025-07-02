@@ -56,6 +56,10 @@ export interface FeedbackSubmission {
     analysis: ProcessFeedbackOutput;
 }
 
+export interface Feedback extends FeedbackSubmission {
+    id: string;
+}
+
 // Get a user's profile from Firestore
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
     if (!db) throw new Error("Firestore is not initialized.");
@@ -182,16 +186,15 @@ export async function deleteConversation(conversationId: string) {
 
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-    const batch = writeBatch(db);
-
+    
     try {
+        const batch = writeBatch(db);
         const messagesSnapshot = await getDocs(messagesRef);
         messagesSnapshot.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
+        batch.delete(conversationRef);
         await batch.commit();
-
-        await deleteDoc(conversationRef);
     } catch (error) {
         console.error("Error deleting conversation:", error);
         // Re-throwing the error to be caught by the calling component
@@ -214,8 +217,18 @@ export async function deleteAllConversationsForUser(userId: string) {
         return;
     }
 
-    const deletePromises = querySnapshot.docs.map(doc => deleteConversation(doc.id));
+    const batch = writeBatch(db);
+    const deletePromises = querySnapshot.docs.map(async (convoDoc) => {
+        batch.delete(convoDoc.ref);
+        const messagesRef = collection(db, 'conversations', convoDoc.id, 'messages');
+        const messagesSnapshot = await getDocs(messagesRef);
+        messagesSnapshot.docs.forEach(messageDoc => {
+            batch.delete(messageDoc.ref);
+        });
+    });
+
     await Promise.all(deletePromises);
+    await batch.commit();
 }
 
 // Un-archive all conversations for a user (client-side)
@@ -223,7 +236,7 @@ export async function unarchiveAllConversationsForUser(userId: string) {
     if (!db) throw new Error("Firestore is not initialized.");
     
     const conversationsRef = collection(db, 'conversations');
-    const q = query(conversationsRef, where('userId', '==', true));
+    const q = query(conversationsRef, where('userId', '==', userId), where('archived', '==', true));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
@@ -268,4 +281,13 @@ export async function submitFeedback(data: { userId: string, feedbackType: Feedb
         }
         throw new Error("An unknown error occurred during feedback submission.");
     }
+}
+
+// Get all feedback submissions
+export async function getAllFeedback(): Promise<Feedback[]> {
+    if (!db) throw new Error("Firestore is not initialized.");
+    const feedbackRef = collection(db, 'feedback');
+    const q = query(feedbackRef, orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Feedback));
 }
