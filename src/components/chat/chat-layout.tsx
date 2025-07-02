@@ -51,8 +51,6 @@ import { TooltipProvider } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { SheetTitle } from '@/components/ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -375,9 +373,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                     </Button>
                 </SidebarTrigger>
                 <div className="flex-1">
-                    <VisuallyHidden>
-                        <SheetTitle>BlinkAi Chat Menu</SheetTitle>
-                    </VisuallyHidden>
                 </div>
                 {user && (
                    <DropdownMenu>
@@ -430,3 +425,5 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     </SidebarProvider>
   );
 }
+
+    
