@@ -14,8 +14,8 @@ import {
   SidebarSeparator,
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
-import { Logo } from '@/components/icons';
-import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical } from 'lucide-react';
+import { Logo, VisuallyHidden } from '@/components/icons';
+import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical, Megaphone } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
@@ -29,8 +29,7 @@ import {
   DropdownMenuTrigger,
  } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { logout } from '@/app/auth/actions';
-import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp, getUserProfile, UserProfile, unarchiveAllConversationsForUser, deleteAllConversationsForUser } from '@/lib/chat-service';
+import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp, getUserProfile, UserProfile } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
@@ -51,6 +50,7 @@ import { TooltipProvider } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { logout } from '@/app/auth/actions';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -169,9 +169,9 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             }
         }
     } catch (error) {
-        console.error("[CLIENT ACTION FAILED: handleDelete]:", error);
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-        toast({ title: 'Error', description: `Could not delete conversation: ${errorMessage}`, variant: 'destructive' });
+        const message = (error instanceof Error) ? error.message : "An unknown error occurred.";
+        console.error("[CLIENT ACTION FAILED: handleDelete]:", message);
+        toast({ title: 'Error', description: `Could not delete conversation: ${message}`, variant: 'destructive' });
     }
   };
 
@@ -187,13 +187,13 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               toast({ title: "Conversation Archived" });
 
               if (conversationId === convo.id) {
-                const allRemainingConversations = [...newActive, ...newArchived].sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
-                if (allRemainingConversations.length > 0) {
-                    router.push(`/chat/${allRemainingConversations[0].id}`);
+                const allRemainingActive = newActive.sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
+                if (allRemainingActive.length > 0) {
+                    router.push(`/chat/${allRemainingActive[0].id}`);
                 } else {
                     router.push('/chat');
                 }
-            }
+              }
           } else { // un-archive
               setArchivedConversations(prev => prev.filter(c => c.id !== convo.id));
               setActiveConversations(prev => [{...convo, archived: false }, ...prev].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime()));
@@ -201,9 +201,9 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               router.push(`/chat/${convo.id}`);
           }
       } catch (error) {
-          console.error("[CLIENT ACTION FAILED: handleArchiveToggle]:", error);
-          const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-          toast({ title: 'Error', description: `Could not update conversation: ${errorMessage}`, variant: 'destructive' });
+        const message = (error instanceof Error) ? error.message : "An unknown error occurred.";
+        console.error("[CLIENT ACTION FAILED: handleArchiveToggle]:", message);
+        toast({ title: 'Error', description: `Could not update conversation: ${message}`, variant: 'destructive' });
       }
   };
 
@@ -296,6 +296,13 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                           <span>Settings</span>
                         </Link>
                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href="/feedback">
+                            <Megaphone className="mr-2 h-4 w-4" />
+                            <span>Feedback</span>
+                          </Link>
+                        </DropdownMenuItem>
+                       <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />
                          <span>Log out</span>
@@ -393,6 +400,13 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             <span>Settings</span>
                           </Link>
                         </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href="/feedback">
+                            <Megaphone className="mr-2 h-4 w-4" />
+                            <span>Feedback</span>
+                          </Link>
+                        </DropdownMenuItem>
+                       <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />
                          <span>Log out</span>
@@ -425,5 +439,3 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     </SidebarProvider>
   );
 }
-
-    

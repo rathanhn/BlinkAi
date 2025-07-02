@@ -1,4 +1,3 @@
-
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -16,6 +15,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { summarizeConversation } from '@/ai/flows/summarize-conversation';
+import { processFeedback, ProcessFeedbackOutput } from '@/ai/flows/process-feedback-flow';
 
 // Re-export Timestamp for use in components
 export { Timestamp };
@@ -46,6 +46,15 @@ export interface UserProfile {
     emailNotifications?: boolean;
 }
 
+export type FeedbackType = 'bug' | 'feature' | 'general';
+
+export interface FeedbackSubmission {
+    userId: string;
+    feedbackType: FeedbackType;
+    feedbackText: string;
+    createdAt: Timestamp;
+    analysis: ProcessFeedbackOutput;
+}
 
 // Get a user's profile from Firestore
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
@@ -173,20 +182,27 @@ export async function deleteConversation(conversationId: string) {
 
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-
-    // For large conversations, this client-side delete could be slow. A batched delete 
-    // in a Cloud Function would be more robust for production environments.
-    const messagesSnapshot = await getDocs(messagesRef);
     const batch = writeBatch(db);
-    messagesSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-    });
-    await batch.commit();
 
-    await deleteDoc(conversationRef);
+    try {
+        const messagesSnapshot = await getDocs(messagesRef);
+        messagesSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        await deleteDoc(conversationRef);
+    } catch (error) {
+        console.error("Error deleting conversation:", error);
+        // Re-throwing the error to be caught by the calling component
+        if (error instanceof Error) {
+            throw new Error(`Failed to delete messages: ${error.message}`);
+        }
+        throw new Error("An unknown error occurred while deleting conversation.");
+    }
 }
 
-// Delete all conversations for a specific user
+// Delete all conversations for a specific user (client-side)
 export async function deleteAllConversationsForUser(userId: string) {
     if (!db) throw new Error("Firestore is not initialized.");
     
@@ -194,23 +210,24 @@ export async function deleteAllConversationsForUser(userId: string) {
     const q = query(conversationsRef, where('userId', '==', userId));
     const querySnapshot = await getDocs(q);
 
-    // This can be a long-running operation. For production apps with many conversations,
-    // a Cloud Function would be a more robust solution.
-    for (const doc of querySnapshot.docs) {
-        await deleteConversation(doc.id);
+    if (querySnapshot.empty) {
+        return;
     }
+
+    const deletePromises = querySnapshot.docs.map(doc => deleteConversation(doc.id));
+    await Promise.all(deletePromises);
 }
 
-// Un-archive all conversations for a user
+// Un-archive all conversations for a user (client-side)
 export async function unarchiveAllConversationsForUser(userId: string) {
     if (!db) throw new Error("Firestore is not initialized.");
     
     const conversationsRef = collection(db, 'conversations');
-    const q = query(conversationsRef, where('userId', '==', userId), where('archived', '==', true));
+    const q = query(conversationsRef, where('userId', '==', true));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-        return; // Nothing to do
+        return;
     }
 
     const batch = writeBatch(db);
@@ -219,4 +236,36 @@ export async function unarchiveAllConversationsForUser(userId: string) {
     });
     
     await batch.commit();
+}
+
+// Update user settings (client-side)
+export async function updateUserSettings(userId: string, settings: Partial<UserProfile>) {
+    if (!db) throw new Error("Firestore is not initialized.");
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, settings);
+}
+
+// Submit feedback
+export async function submitFeedback(data: { userId: string, feedbackType: FeedbackType, feedbackText: string}) {
+    if (!db) throw new Error("Firestore is not initialized.");
+    
+    try {
+        const analysis = await processFeedback({
+            feedbackType: data.feedbackType,
+            feedbackText: data.feedbackText
+        });
+
+        const feedbackRef = collection(db, 'feedback');
+        await addDoc(feedbackRef, {
+            ...data,
+            analysis,
+            createdAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error("Error submitting feedback:", error);
+        if (error instanceof Error) {
+            throw new Error(`Failed to submit feedback: ${error.message}`);
+        }
+        throw new Error("An unknown error occurred during feedback submission.");
+    }
 }
