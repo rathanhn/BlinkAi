@@ -8,5 +8,5 @@ export default async function ChatPage({ params }: { params: { conversationId?: 
   // When the route is /chat/123, conversationId will be ['123']. We take the first element.
   const conversationId = awaitedParams.conversationId?.[0];
   
-  return <ChatLayout key={conversationId} conversationId={conversationId} />;
+  return <ChatLayout conversationId={conversationId} />;
 }

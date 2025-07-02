@@ -66,12 +66,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   const isTempChat = !conversationId;
 
-  console.log("--- ChatLayout Render ---");
-  console.log("conversationId:", conversationId);
-  console.log("isTempChat:", isTempChat);
-  console.log("isInitialLoad:", isInitialLoad);
-  console.log("loadingConversations:", loadingConversations);
-
   const handleError = (error: any, title: string) => {
     const errorMessage = error.message || 'An unknown error occurred.';
     toast({
@@ -91,15 +85,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   };
 
   useEffect(() => {
-    console.log("--- useEffect [auth] running ---");
     if (!auth) {
-      console.log("Auth service not available, redirecting to login.");
       setLoadingAuth(false);
       router.push('/login');
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("onAuthStateChanged triggered. User:", user?.uid);
       if (user) {
         setUser(user);
         const profile = await getUserProfile(user.uid);
@@ -107,7 +98,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       } else {
         setUser(null);
         setUserProfile(null);
-        console.log("No user, redirecting to login.");
         router.push('/login');
       }
       setLoadingAuth(false);
@@ -118,49 +108,37 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   // This effect ONLY loads data. It runs when the user logs in.
   useEffect(() => {
     if (user) {
-      console.log("--- useEffect [user] running ---: Fetching conversations.");
       setLoadingConversations(true);
       
       Promise.all([
         getConversations(user.uid),
         getArchivedConversations(user.uid)
       ]).then(([activeConvos, archivedConvos]) => {
-          console.log(`Fetched ${activeConvos.length} active and ${archivedConvos.length} archived conversations.`);
           const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
       }).catch(err => {
-          console.error("Error fetching conversations:", err);
           handleError(err, 'Could not fetch conversations');
       }).finally(() => {
-          console.log("Finished fetching conversations.");
           setLoadingConversations(false);
       });
-    } else {
-      console.log("--- useEffect [user] running ---: No user, skipping fetch.");
     }
   }, [user]);
 
   // This effect ONLY handles the initial redirect.
   useEffect(() => {
-    console.log("--- useEffect [redirect] running ---");
-    console.log(`Checking conditions: isInitialLoad=${isInitialLoad}, loadingConversations=${loadingConversations}, !conversationId=${!conversationId}`);
-    
     if (isInitialLoad && !loadingConversations && !conversationId && activeConversations.length > 0) {
-      console.log(`--- REDIRECTING to most recent chat: ${activeConversations[0].id} ---`);
       router.replace(`/chat/${activeConversations[0].id}`);
-      setIsInitialLoad(false);
     }
     
+    // Once we have finished the first load, we don't want to run this again.
     if (isInitialLoad && !loadingConversations) {
-        console.log("--- Marking initial load as complete. ---");
         setIsInitialLoad(false);
     }
   }, [activeConversations, loadingConversations, conversationId, isInitialLoad, router]);
 
   
   const handleNewChat = async () => {
-    console.log("--- handleNewChat called ---");
     if (!user) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
       return;
@@ -255,15 +233,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   };
 
   const handleToggleTempChat = (checked: boolean) => {
-    console.log(`--- handleToggleTempChat called with checked=${checked} ---`);
     if (checked) {
-        console.log("Navigating to /chat for temp chat.");
         router.push('/chat');
     } else if (activeConversations.length > 0) {
-        console.log(`Navigating to most recent chat: ${activeConversations[0].id}`);
         router.push(`/chat/${activeConversations[0].id}`);
     } else {
-        console.log("No active chats, navigating to /chat.");
         router.push('/chat');
     }
   }
@@ -436,11 +410,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         </Sidebar>
         <SidebarInset>
             <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-card px-4 md:hidden">
-                <SidebarTrigger asChild>
-                    <Button size="icon" variant="outline">
-                        <Logo className="h-6 w-6" />
-                        <span className="sr-only">Toggle Menu</span>
-                    </Button>
+                <SidebarTrigger>
+                    <div className="sr-only">
+                      <SheetTitle>Navigation Menu</SheetTitle>
+                      <SheetDescription>A list of your conversations and actions.</SheetDescription>
+                    </div>
                 </SidebarTrigger>
                  <div className="flex-1" />
                 {user && (
