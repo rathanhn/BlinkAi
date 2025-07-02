@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar';
-import { Logo, VisuallyHidden } from '@/components/icons';
+import { Logo } from '@/components/icons';
 import { Plus, Settings, MessageSquare, LogOut, MoreVertical, Archive, Trash2, ArchiveRestore, FlaskConical, Megaphone, Shield } from 'lucide-react';
 import { Chat } from './chat';
 import { useState, useEffect } from 'react';
@@ -175,6 +175,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         await signOut(auth);
     }
     await logout();
+    router.push('/login');
   };
 
   const handleDelete = async (convoId: string) => {
@@ -367,12 +368,10 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             onCheckedChange={(checked) => {
                                 if (checked) {
                                     router.push('/chat');
-                                } else if (isTempChat) { // Only switch if currently in temp chat
-                                    if (activeConversations.length > 0) {
-                                        router.push(`/chat/${activeConversations[0].id}`);
-                                    } else {
-                                        handleNewChat();
-                                    }
+                                } else if (activeConversations.length > 0) {
+                                    router.push(`/chat/${activeConversations[0].id}`);
+                                } else {
+                                    router.push('/chat'); // Fallback to new chat page if no active chats exist
                                 }
                             }}
                         />
@@ -423,10 +422,10 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                     </Button>
                 </SidebarTrigger>
                  <div className="flex-1">
-                    <VisuallyHidden>
+                    <div className="sr-only">
                         <SheetTitle>BlinkAi Chat Menu</SheetTitle>
                         <SheetDescription>A list of your conversations and actions.</SheetDescription>
-                    </VisuallyHidden>
+                    </div>
                 </div>
                 {user && (
                    <DropdownMenu>
@@ -495,7 +494,3 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     </SidebarProvider>
   );
 }
-
-    
-
-    
