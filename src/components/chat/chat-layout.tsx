@@ -59,16 +59,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
   const isTempChat = !conversationId;
-
-  // --- ADDED FOR DEBUGGING ---
-  console.log(`%c--- ChatLayout Render ---`, 'color: #007acc; font-weight: bold;');
-  console.log(`conversationId: ${conversationId}`);
-  console.log(`isTempChat: ${isTempChat}`);
-  // --- END DEBUGGING ---
 
   const handleError = (error: any, title: string) => {
     const errorMessage = error.message || 'An unknown error occurred.';
@@ -109,14 +104,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     return () => unsubscribe();
   }, [router]);
   
-  // This effect should only run once when the user logs in.
+  // This effect runs once when the user logs in to load conversations
+  // and handle initial routing.
   useEffect(() => {
     if (user) {
-      // --- ADDED FOR DEBUGGING ---
-      console.log('%c--- useEffect [user] running ---', 'color: #2E8B57');
-      // --- END DEBUGGING ---
       setLoadingConversations(true);
-      // Fetch all conversations
+      
       Promise.all([
         getConversations(user.uid),
         getArchivedConversations(user.uid)
@@ -125,14 +118,16 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
 
-          // This check is now safe because this effect only runs once on user load.
-          // It redirects if the app loads on the base URL without a specific chat open.
-          if (!conversationId && activeConvos.length > 0) {
-            // --- ADDED FOR DEBUGGING ---
-            console.log(`%c--- REDIRECTING to most recent chat: ${activeConvos[0].id} ---`, 'color: #FF5733');
-            // --- END DEBUGGING ---
+          // This check redirects if the app loads on the base URL without a specific chat open,
+          // but only on the very first load. It prevents re-redirecting when the user
+          // intentionally navigates to the temporary chat.
+          if (isInitialLoad && !conversationId && activeConvos.length > 0) {
             router.replace(`/chat/${activeConvos[0].id}`);
           }
+          
+          // Mark the initial load as complete so the redirect doesn't happen again.
+          setIsInitialLoad(false);
+
       }).catch(err => {
           console.error("Error fetching conversations:", err);
           handleError(err, 'Could not fetch conversations');
@@ -141,7 +136,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       });
     }
   // We intentionally only run this when the user object changes.
-  // Subsequent state updates are handled by the action handlers.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -151,18 +145,26 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
       return;
     }
+    // If already in a temp chat, do nothing to prevent creating multiple new chats.
     if (isTempChat) {
-      router.push('/chat');
       return;
     }
     try {
+      // Navigate to the base /chat route to create a new temp chat first.
+      router.push('/chat');
+      
+      // Then, in the background, create the new persistent conversation
       const newConversation = await startNewConversation(user.uid);
       const serializableConvo = {
           ...newConversation,
           lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
       };
+      
+      // Add the new conversation to state and navigate to it.
+      // This will happen after the user has started typing in the temp chat.
       setActiveConversations(prev => [serializableConvo as any, ...prev]);
       router.push(`/chat/${newConversation.id}`);
+
     } catch (error) {
       handleError(error, 'Could not start new chat');
     }
@@ -380,10 +382,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             id="temp-chat-toggle"
                             checked={isTempChat}
                             onCheckedChange={(checked) => {
-                                // --- ADDED FOR DEBUGGING ---
-                                console.log('%c--- Switch Toggled ---', 'color: #DAA520');
-                                console.log(`New checked state: ${checked}`);
-                                // --- END DEBUGGING ---
                                 if (checked) {
                                     router.push('/chat');
                                 } else if (activeConversations.length > 0) {
@@ -485,7 +483,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             <main className='flex-1 flex flex-col overflow-hidden'>
             {user && userProfile ? (
               <Chat 
-                key={conversationId}
                 conversationId={conversationId} 
                 isTempChat={isTempChat}
                 user={user} 
