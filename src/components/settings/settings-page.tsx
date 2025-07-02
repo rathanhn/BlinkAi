@@ -21,7 +21,8 @@ import { Skeleton } from '../ui/skeleton';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { uploadProfilePicture, updateUserPersona, clearAllConversations, unarchiveAllConversations, updateUserPreferences } from '@/app/settings/actions';
+import { uploadProfilePicture } from '@/app/settings/actions';
+import { deleteAllConversationsForUser, unarchiveAllConversationsForUser } from '@/lib/chat-service';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from '../ui/textarea';
 import {
@@ -73,13 +74,14 @@ export function SettingsPage() {
         setImagePreview(currentUser.photoURL || null);
         
         // Fetch and set other user data from Firestore
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-            setPersona(userDoc.data().persona || '');
-            setEmailNotifications(userDoc.data().emailNotifications || false);
+        if (db) {
+            const userDocRef = doc(db, 'users', currentUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                setPersona(userDoc.data().persona || '');
+                setEmailNotifications(userDoc.data().emailNotifications || false);
+            }
         }
-
       }
       setLoading(false);
     });
@@ -139,51 +141,56 @@ export function SettingsPage() {
   
   const handleAgentSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !db) return;
     setIsSaving(true);
-    const result = await updateUserPersona(user.uid, persona);
-    if (result.success) {
-        toast({ title: 'Success', description: 'Agent persona updated!' });
-    } else {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      await updateDoc(userDocRef, { persona });
+      toast({ title: 'Success', description: 'Agent persona updated!' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   }
 
   const handleClearHistory = async () => {
     if (!user) return;
     setIsSaving(true);
-    const result = await clearAllConversations(user.uid);
-    if (result.success) {
-        toast({ title: 'Success', description: 'Your chat history has been cleared.' });
-    } else {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+    try {
+      await deleteAllConversationsForUser(user.uid);
+      toast({ title: 'Success', description: 'Your chat history has been cleared.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
   
   const handleRestoreAll = async () => {
     if (!user) return;
     setIsSaving(true);
-    const result = await unarchiveAllConversations(user.uid);
-    if (result.success) {
-        toast({ title: 'Success', description: 'All archived chats have been restored.' });
-    } else {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+    try {
+      await unarchiveAllConversationsForUser(user.uid);
+      toast({ title: 'Success', description: 'All archived chats have been restored.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   const handleNotificationsChange = async (checked: boolean) => {
-    if (!user) return;
+    if (!user || !db) return;
     setEmailNotifications(checked);
-    const result = await updateUserPreferences(user.uid, { emailNotifications: checked });
-    if (result.success) {
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      await updateDoc(userDocRef, { emailNotifications: checked });
       toast({ title: 'Preferences Saved' });
-    } else {
+    } catch (error: any) {
       // Revert on failure
       setEmailNotifications(!checked);
-      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   };
 

@@ -3,7 +3,6 @@
 
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from '@/lib/firebase';
-import { deleteAllConversationsForUser, unarchiveAllConversationsForUser } from '@/lib/chat-service';
 import { doc, updateDoc } from 'firebase/firestore';
 
 // Cloudinary is configured automatically via the CLOUDINARY_URL environment variable.
@@ -45,59 +44,4 @@ export async function uploadProfilePicture(formData: FormData) {
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during upload.";
     return { success: false, error: `Upload failed: ${errorMessage}` };
   }
-}
-
-export async function updateUserPersona(userId: string, persona: string) {
-    if (!db || !userId) {
-        return { success: false, error: 'User or database not available.' };
-    }
-    try {
-        const userDocRef = doc(db, 'users', userId);
-        await updateDoc(userDocRef, { persona });
-        return { success: true };
-    } catch (error: any) {
-        console.error('[ACTION FAILED: updateUserPersona]:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-export async function updateUserPreferences(userId: string, preferences: { emailNotifications: boolean }) {
-    if (!db || !userId) {
-        return { success: false, error: 'User or database not available.' };
-    }
-    try {
-        const userDocRef = doc(db, 'users', userId);
-        await updateDoc(userDocRef, preferences);
-        return { success: true };
-    } catch (error: any) {
-        console.error('[ACTION FAILED: updateUserPreferences]:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-export async function clearAllConversations(userId: string) {
-    if (!db || !userId) {
-        return { success: false, error: 'User or database not available.' };
-    }
-    try {
-        await deleteAllConversationsForUser(userId);
-        return { success: true };
-    } catch (error: any) {
-        console.error('[ACTION FAILED: clearAllConversations]:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-
-export async function unarchiveAllConversations(userId: string) {
-    if (!db || !userId) {
-        return { success: false, error: 'User or database not available.' };
-    }
-    try {
-        await unarchiveAllConversationsForUser(userId);
-        return { success: true };
-    } catch (error: any) {
-        console.error('[ACTION FAILED: unarchiveAllConversations]:', error);
-        return { success: false, error: error.message };
-    }
 }
