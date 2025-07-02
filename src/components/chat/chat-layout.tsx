@@ -52,7 +52,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
-import { SheetDescription, SheetTitle } from '../ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -139,6 +138,10 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const handleNewChat = async () => {
     if (!user) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
+      return;
+    }
+    if (isTempChat) {
+      router.push('/chat');
       return;
     }
     try {
@@ -421,12 +424,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                         <span className="sr-only">Toggle Menu</span>
                     </Button>
                 </SidebarTrigger>
-                 <div className="flex-1">
-                    <div className="sr-only">
-                        <SheetTitle>BlinkAi Chat Menu</SheetTitle>
-                        <SheetDescription>A list of your conversations and actions.</SheetDescription>
-                    </div>
-                </div>
+                 <div className="flex-1" />
                 {user && (
                    <DropdownMenu>
                     <DropdownMenuTrigger asChild>
