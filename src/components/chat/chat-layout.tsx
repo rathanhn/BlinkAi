@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -31,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { getConversations, startNewConversation, getArchivedConversations, deleteConversation, archiveConversation, type Conversation, Timestamp, getUserProfile, UserProfile } from '@/lib/chat-service';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import {
   AlertDialog,
@@ -52,6 +53,22 @@ import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
 import { usePathname } from 'next/navigation';
+import { onSnapshot, query, collection, where, orderBy } from 'firebase/firestore';
+
+
+const getSafeTime = (date: any): number => {
+    if (!date) return 0;
+    // Firestore Timestamp
+    if (typeof date.toDate === 'function') {
+        return date.toDate().getTime();
+    }
+    // JS Date object
+    if (typeof date.getTime === 'function') {
+        return date.getTime();
+    }
+    return 0;
+};
+
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -60,7 +77,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
-  const initialLoadHandled = useRef(false);
+  const isInitialLoad = useRef(true);
   const router = useRouter();
   const { toast } = useToast();
   const pathname = usePathname();
@@ -107,55 +124,64 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   }, [router]);
   
   useEffect(() => {
-    if (user && !initialLoadHandled.current) {
-      setLoadingConversations(true);
-      
-      Promise.all([
-        getConversations(user.uid),
-        getArchivedConversations(user.uid)
-      ]).then(([activeConvos, archivedConvos]) => {
-          const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
-          setActiveConversations(activeConvos.map(serialize) as any);
-          setArchivedConversations(archivedConvos.map(serialize) as any);
-
-          // After fetching, if we are on the base /chat path, redirect to the most recent chat.
-          if (!conversationId) {
-            const allConversations = [...activeConvos, ...archivedConvos];
-            if (allConversations.length > 0) {
-              const mostRecentConversation = allConversations.sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime())[0];
-              router.replace(`/chat/${mostRecentConversation.id}`);
-            }
-          }
-      }).catch(err => {
-          handleError(err, 'Could not fetch conversations');
-      }).finally(() => {
-          setLoadingConversations(false);
-          initialLoadHandled.current = true; // Mark initial load as handled
-      });
-    } else if (user && initialLoadHandled.current) {
-        // If it's not the initial load, just refresh the conversation lists
+    if (user) {
         setLoadingConversations(true);
-        Promise.all([
-            getConversations(user.uid),
-            getArchivedConversations(user.uid)
-        ]).then(([activeConvos, archivedConvos]) => {
-            const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
-            setActiveConversations(activeConvos.map(serialize) as any);
-            setArchivedConversations(archivedConvos.map(serialize) as any);
-        }).catch(err => {
-            handleError(err, 'Could not refresh conversations');
-        }).finally(() => {
-            setLoadingConversations(false);
-        });
+
+        const activeQuery = query(
+            collection(db, 'conversations'), 
+            where('userId', '==', user.uid), 
+            where('archived', '==', false), 
+            orderBy('lastUpdated', 'desc')
+        );
+
+        const archivedQuery = query(
+            collection(db, 'conversations'), 
+            where('userId', '==', user.uid), 
+            where('archived', '==', true), 
+            orderBy('lastUpdated', 'desc')
+        );
+
+        const unsubActive = onSnapshot(activeQuery, (snapshot) => {
+            const convos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
+            setActiveConversations(convos);
+            if (isInitialLoad.current) {
+                setLoadingConversations(false);
+            }
+        }, (err) => handleError(err, 'Could not fetch conversations'));
+
+        const unsubArchived = onSnapshot(archivedQuery, (snapshot) => {
+            const convos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
+            setArchivedConversations(convos);
+            if (isInitialLoad.current) {
+                setLoadingConversations(false);
+            }
+        }, (err) => handleError(err, 'Could not fetch archived conversations'));
+
+        return () => {
+            unsubActive();
+            unsubArchived();
+        };
     }
-  }, [user, conversationId, router]); // Dependency on conversationId ensures this runs on navigation
+  }, [user]);
+
+  useEffect(() => {
+    if (isInitialLoad.current && !loadingConversations && !conversationId) {
+        const allConversations = [...activeConversations, ...archivedConversations];
+        if (allConversations.length > 0) {
+            const mostRecentConversation = allConversations.sort((a, b) => getSafeTime(b.lastUpdated) - getSafeTime(a.lastUpdated))[0];
+            if (mostRecentConversation) {
+                router.replace(`/chat/${mostRecentConversation.id}`);
+            }
+        }
+        isInitialLoad.current = false;
+    }
+  }, [loadingConversations, conversationId, activeConversations, archivedConversations, router]);
   
   const handleNewChat = async () => {
     if (!user) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
       return;
     }
-    // Navigate to the base /chat route to create a new temp chat first.
     router.push('/chat');
   };
 
@@ -186,25 +212,17 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const handleDelete = async (convoId: string) => {
     try {
         await deleteConversation(convoId);
-
-        const newActive = activeConversations.filter(c => c.id !== convoId);
-        const newArchived = archivedConversations.filter(c => c.id !== convoId);
-
-        setActiveConversations(newActive);
-        setArchivedConversations(newArchived);
-
         toast({ title: "Conversation Deleted" });
 
         // If we deleted the chat we are currently on
         if (conversationId === convoId) {
-            // Combine and sort all remaining chats to find the most recent one
-            const allRemainingConversations = [...newActive, ...newArchived].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
+            const allRemainingConversations = [...activeConversations, ...archivedConversations]
+                .filter(c => c.id !== convoId)
+                .sort((a,b) => getSafeTime(b.lastUpdated) - getSafeTime(a.lastUpdated));
             
             if (allRemainingConversations.length > 0) {
-                // Navigate to the most recent remaining conversation
                 router.push(`/chat/${allRemainingConversations[0].id}`);
             } else {
-                // If no chats are left, go to the temporary chat screen
                 router.push('/chat');
             }
         }
@@ -216,16 +234,13 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const handleArchiveToggle = async (convo: Conversation, shouldArchive: boolean) => {
       try {
           await archiveConversation(convo.id, shouldArchive);
+          
           if (shouldArchive) {
-              const newActive = activeConversations.filter(c => c.id !== convo.id);
-              const newArchived = [{...convo, archived: true }, ...archivedConversations].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
- 
-              setActiveConversations(newActive);
-              setArchivedConversations(newArchived);
               toast({ title: "Conversation Archived" });
-
               if (conversationId === convo.id) {
-                const allRemainingActive = newActive.sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
+                const allRemainingActive = activeConversations
+                    .filter(c => c.id !== convo.id)
+                    .sort((a, b) => getSafeTime(b.lastUpdated) - getSafeTime(a.lastUpdated));
                 if (allRemainingActive.length > 0) {
                     router.push(`/chat/${allRemainingActive[0].id}`);
                 } else {
@@ -233,9 +248,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 }
               }
           } else { // un-archive
-              setArchivedConversations(prev => prev.filter(c => c.id !== convo.id));
-              const newActiveConversations = [{...convo, archived: false }, ...activeConversations].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
-              setActiveConversations(newActiveConversations);
               toast({ title: "Conversation Restored" });
               router.push(`/chat/${convo.id}`);
           }
@@ -246,12 +258,14 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   const handleToggleTempChat = (checked: boolean) => {
     if (checked) {
-      const path = '/chat';
-      router.push(path);
+      router.push('/chat');
     } else if (activeConversations.length > 0) {
-      const mostRecentConversation = [...activeConversations, ...archivedConversations].sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime())[0];
-      const path = `/chat/${mostRecentConversation.id}`;
-      router.push(path);
+      const mostRecentConversation = [...activeConversations, ...archivedConversations].sort((a, b) => getSafeTime(b.lastUpdated) - getSafeTime(a.lastUpdated))[0];
+      if (mostRecentConversation) {
+        router.push(`/chat/${mostRecentConversation.id}`);
+      } else {
+        router.push('/chat');
+      }
     } else {
         router.push('/chat');
     }
