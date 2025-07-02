@@ -44,6 +44,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { TooltipProvider } from '../ui/tooltip';
@@ -151,24 +152,19 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     try {
         await deleteConversation(convoId);
 
-        // Create the new state of both lists
         const newActive = activeConversations.filter(c => c.id !== convoId);
         const newArchived = archivedConversations.filter(c => c.id !== convoId);
 
-        // Update the state
         setActiveConversations(newActive);
         setArchivedConversations(newArchived);
         
         toast({ title: "Conversation Deleted" });
 
-        // Only redirect if the currently viewed conversation was deleted
         if (conversationId === convoId) {
-            const allRemainingConversations = [...newActive, ...newArchived].sort((a,b) => b.lastUpdated.getTime() - a.lastUpdated.getTime());
+            const allRemainingConversations = [...newActive, ...newArchived].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
             if (allRemainingConversations.length > 0) {
-                // Navigate to the first available (most recent) conversation
                 router.push(`/chat/${allRemainingConversations[0].id}`);
             } else {
-                // No conversations left, go to temp chat
                 router.push('/chat');
             }
         }
@@ -184,15 +180,14 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           await archiveConversation(convo.id, shouldArchive);
           if (shouldArchive) {
               const newActive = activeConversations.filter(c => c.id !== convo.id);
-              const newArchived = [{...convo, archived: true }, ...archivedConversations].sort((a,b) => b.lastUpdated.getTime() - a.lastUpdated.getTime());
+              const newArchived = [{...convo, archived: true }, ...archivedConversations].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
 
               setActiveConversations(newActive);
               setArchivedConversations(newArchived);
               toast({ title: "Conversation Archived" });
 
-              // If the user archived the chat they were looking at, navigate away to the next most recent chat
               if (conversationId === convo.id) {
-                const allRemainingConversations = [...newActive, ...newArchived];
+                const allRemainingConversations = [...newActive, ...newArchived].sort((a, b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
                 if (allRemainingConversations.length > 0) {
                     router.push(`/chat/${allRemainingConversations[0].id}`);
                 } else {
@@ -201,9 +196,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             }
           } else { // un-archive
               setArchivedConversations(prev => prev.filter(c => c.id !== convo.id));
-              setActiveConversations(prev => [{...convo, archived: false }, ...prev].sort((a,b) => b.lastUpdated.getTime() - a.lastUpdated.getTime()));
+              setActiveConversations(prev => [{...convo, archived: false }, ...prev].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime()));
               toast({ title: "Conversation Restored" });
-              // Navigate to the restored chat so the user can see it
               router.push(`/chat/${convo.id}`);
           }
       } catch (error) {
@@ -380,7 +374,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 </SidebarTrigger>
                 <div className="flex-1">
                     <VisuallyHidden>
-                        <h1 className="font-semibold text-xl">BlinkAi Chat</h1>
+                        <SheetTitle>BlinkAi Chat Menu</SheetTitle>
                     </VisuallyHidden>
                 </div>
                 {user && (
