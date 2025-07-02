@@ -51,6 +51,7 @@ import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
+import { ToastAction } from '../ui/toast';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -63,6 +64,24 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const { toast } = useToast();
 
   const isTempChat = !conversationId;
+
+  const handleError = (error: any, title: string) => {
+    const errorMessage = error.message || 'An unknown error occurred.';
+    toast({
+      title,
+      description: errorMessage,
+      variant: 'destructive',
+      duration: 10000,
+      action: (
+        <ToastAction
+          altText="Report Error"
+          onClick={() => router.push(`/feedback?error=${encodeURIComponent(errorMessage)}&type=bug`)}
+        >
+          Report
+        </ToastAction>
+      ),
+    });
+  };
 
   useEffect(() => {
     if (!auth) {
@@ -95,14 +114,18 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           const serialize = (c: Conversation) => ({ ...c, lastUpdated: (c.lastUpdated as Timestamp).toDate() });
           setActiveConversations(activeConvos.map(serialize) as any);
           setArchivedConversations(archivedConvos.map(serialize) as any);
+
+          if (!conversationId && activeConvos.length > 0) {
+            router.replace(`/chat/${activeConvos[0].id}`);
+          }
       }).catch(err => {
           console.error("Error fetching conversations:", err);
-          toast({ title: 'Error', description: 'Could not fetch conversations. Check Firestore rules and indexes.', variant: 'destructive' });
+          handleError(err, 'Could not fetch conversations');
       }).finally(() => {
           setLoadingConversations(false);
       });
     }
-  }, [user, toast]);
+  }, [user, conversationId, router]);
 
   
   const handleNewChat = async () => {
@@ -119,8 +142,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       setActiveConversations(prev => [serializableConvo as any, ...prev]);
       router.push(`/chat/${newConversation.id}`);
     } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Could not start a new chat.', variant: 'destructive' });
+      handleError(error, 'Could not start new chat');
     }
   };
 
@@ -160,18 +182,15 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         toast({ title: "Conversation Deleted" });
 
         if (conversationId === convoId) {
-            // Find the most recently updated conversation among the remaining ones
             const allRemainingConversations = [...newActive, ...newArchived].sort((a,b) => (b.lastUpdated as any).getTime() - (a.lastUpdated as any).getTime());
             if (allRemainingConversations.length > 0) {
                 router.push(`/chat/${allRemainingConversations[0].id}`);
             } else {
-                router.push('/chat'); // Fallback to temp chat if no conversations are left
+                router.push('/chat');
             }
         }
     } catch (error) {
-        const message = (error instanceof Error) ? error.message : "An unknown error occurred.";
-        console.error("[CLIENT ACTION FAILED: handleDelete]:", message);
-        toast({ title: 'Error', description: `Could not delete conversation: ${message}`, variant: 'destructive' });
+      handleError(error, 'Could not delete conversation');
     }
   };
 
@@ -202,9 +221,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               router.push(`/chat/${convo.id}`);
           }
       } catch (error) {
-        const message = (error instanceof Error) ? error.message : "An unknown error occurred.";
-        console.error("[CLIENT ACTION FAILED: handleArchiveToggle]:", message);
-        toast({ title: 'Error', description: `Could not update conversation: ${message}`, variant: 'destructive' });
+        handleError(error, 'Could not update conversation');
       }
   };
 
@@ -338,7 +355,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                                 if (checked) {
                                     router.push('/chat');
                                 } else if (isTempChat) { // Only switch if currently in temp chat
-                                    handleNewChat();
+                                    if (activeConversations.length > 0) {
+                                        router.push(`/chat/${activeConversations[0].id}`);
+                                    } else {
+                                        handleNewChat();
+                                    }
                                 }
                             }}
                         />

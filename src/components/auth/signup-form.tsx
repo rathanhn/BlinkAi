@@ -19,6 +19,7 @@ import { auth, db } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '../ui/toast';
 
 export function SignupForm() {
   const router = useRouter();
@@ -92,7 +93,20 @@ export function SignupForm() {
 
       router.push('/chat');
     } catch (error: any) {
-        toast({ title: 'Sign-up Failed', description: error.message, variant: 'destructive' });
+        const errorMessage = error.message || 'An unknown error occurred.';
+        toast({ 
+          title: 'Sign-up Failed', 
+          description: errorMessage, 
+          variant: 'destructive',
+          action: (
+            <ToastAction
+              altText="Report Error"
+              onClick={() => router.push(`/feedback?error=${encodeURIComponent(errorMessage)}&type=bug`)}
+            >
+              Report
+            </ToastAction>
+          ),
+        });
     } finally {
         setLoading(false);
     }

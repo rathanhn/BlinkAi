@@ -1,7 +1,7 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp, UserProfile } from "@/lib/chat-service";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp, UserProfile, startNewConversation } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +15,8 @@ import { generateChatResponse } from "@/ai/flows/generate-chat-response";
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from "@/components/icons";
 import { CodeBlock } from "./code-block";
+import { useRouter } from "next/navigation";
+import { ToastAction } from "../ui/toast";
 
 interface Message {
   id: string;
@@ -30,6 +32,7 @@ export function Chat({
   user,
   userProfile,
   onTitleUpdate,
+  setActiveConversations
 }: { 
   conversationId?: string; 
   user: FirebaseUser;
@@ -43,6 +46,7 @@ export function Chat({
   const [loading, setLoading] = useState(true);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   const isTempChat = !conversationId;
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -50,6 +54,24 @@ export function Chat({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleError = (error: any, title: string) => {
+    const errorMessage = error.message || 'An unknown error occurred.';
+    toast({
+      title,
+      description: errorMessage,
+      variant: 'destructive',
+      duration: 10000,
+      action: (
+        <ToastAction
+          altText="Report Error"
+          onClick={() => router.push(`/feedback?error=${encodeURIComponent(errorMessage)}&type=bug`)}
+        >
+          Report
+        </ToastAction>
+      ),
+    });
   };
 
   useEffect(() => {
@@ -68,13 +90,12 @@ export function Chat({
             setMessages(serializableHistory);
         })
         .catch(err => {
-            console.error("Error fetching messages: ", err);
-            toast({ title: "Error", description: "Failed to load message history.", variant: 'destructive'})
+            handleError(err, 'Failed to load message history.');
         })
         .finally(() => {
             setLoading(false);
         });
-  }, [conversationId, toast]);
+  }, [conversationId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -92,10 +113,8 @@ export function Chat({
     const userInput = input.trim();
     if (!userInput || isPending) return;
 
-    const currentConvoId = conversationId;
-    const wasNewChat = currentConvoId && messages.length === 0;
+    let currentConvoId = conversationId;
     
-    // UI message for user
     const tempUserMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -103,21 +122,36 @@ export function Chat({
       timestamp: new Date(),
       ...(replyingTo && { replyTo: replyingTo.id }),
     }
-    setMessages((prev) => [...prev, tempUserMessage]);
+    
     setInput("");
     setReplyingTo(null);
+    setMessages((prev) => [...prev, tempUserMessage]);
     
     startTransition(async () => {
       try {
+        let wasNewChat = false;
+        
+        // If it's a temp chat, create a new conversation first
+        if (!currentConvoId) {
+          wasNewChat = true;
+          const newConversation = await startNewConversation(user.uid);
+          currentConvoId = newConversation.id;
+          
+          const serializableConvo = {
+              ...newConversation,
+              lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
+          };
+          setActiveConversations(prev => [serializableConvo as any, ...prev]);
+          router.push(`/chat/${currentConvoId}`);
+        }
+        
         const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
           role: "user",
           content: userInput,
-          ...(replyingTo && { replyTo: replyTo.id }),
+          ...(replyingTo && { replyTo: replyingTo.id }),
         };
 
-        if (currentConvoId) {
-            await addMessage(currentConvoId, newUserMessage);
-        }
+        await addMessage(currentConvoId, newUserMessage);
 
         const personaInfo = `The user's name is ${userProfile.displayName}.
         ${userProfile.persona ? `\nCustom Persona Instructions:\n${userProfile.persona}` : ''}`;
@@ -130,34 +164,26 @@ export function Chat({
             content: aiResponse.aiResponse,
           };
           
-          if (currentConvoId) {
-            await addMessage(currentConvoId, aiMessage);
-            if (wasNewChat) {
+          await addMessage(currentConvoId, aiMessage);
+          
+          if (wasNewChat) {
               const summary = await updateConversationTitle(currentConvoId, userInput);
               if (summary) {
                 onTitleUpdate(currentConvoId, summary);
               }
-            }
           }
 
-          // UI message for assistant
           const tempAiMessage: Message = {
             ...(aiMessage as Message),
             id: crypto.randomUUID(),
             timestamp: new Date(),
           }
-          // Replace temp user message and add AI response for a smooth feel
           setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, tempAiMessage]);
         } else {
           throw new Error('Failed to get AI response');
         }
       } catch (error) {
-        console.error("Failed to send message:", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to send message. Please try again.",
-        });
+        handleError(error, 'Failed to send message');
         setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessage.id));
       }
     });
@@ -184,15 +210,17 @@ export function Chat({
     try {
       await updateMessageReaction(conversationId, messageId, reaction, user.uid);
     } catch(e) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to save reaction.' });
+      handleError(e, 'Failed to save reaction');
       // Re-fetch to correct UI on error
-      getMessages(conversationId).then(history => {
-          const serializableHistory = history.map(msg => ({
-              ...msg,
-              timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
-          }));
-          setMessages(serializableHistory);
-      });
+      if (conversationId) {
+        getMessages(conversationId).then(history => {
+            const serializableHistory = history.map(msg => ({
+                ...msg,
+                timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
+            }));
+            setMessages(serializableHistory);
+        });
+      }
     }
   };
   
@@ -334,7 +362,7 @@ export function Chat({
         <form id="chat-form" onSubmit={handleSubmit} className="flex items-center gap-4">
           <Textarea
             ref={textareaRef}
-            placeholder={isTempChat ? "Temporary Chat. History is not saved." : "Type your message..."}
+            placeholder={isTempChat ? "Start a new conversation..." : "Type your message..."}
             className={cn("flex-1 resize-none min-h-[40px] max-h-48",
               replyingTo && "rounded-t-none",
               isPending && "bg-background/50 placeholder:text-foreground/80"
@@ -359,5 +387,3 @@ export function Chat({
     </div>
   );
 }
-
-    

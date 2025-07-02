@@ -40,12 +40,15 @@ import { useTheme } from 'next-themes';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Separator } from '../ui/separator';
 import { Switch } from '../ui/switch';
+import { ToastAction } from '../ui/toast';
+import { useRouter } from 'next/navigation';
 
 export function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const { setTheme, theme } = useTheme();
+  const router = useRouter();
   
   // Account state
   const [name, setName] = useState('');
@@ -61,6 +64,24 @@ export function SettingsPage() {
 
   const { toast } = useToast();
 
+  const handleError = (error: any, title: string) => {
+    const errorMessage = error.message || 'An unknown error occurred.';
+    toast({
+      title,
+      description: errorMessage,
+      variant: 'destructive',
+      duration: 10000,
+      action: (
+        <ToastAction
+          altText="Report Error"
+          onClick={() => router.push(`/feedback?error=${encodeURIComponent(errorMessage)}&type=bug`)}
+        >
+          Report
+        </ToastAction>
+      ),
+    });
+  };
+
   useEffect(() => {
     if (!auth) {
         setLoading(false);
@@ -75,11 +96,15 @@ export function SettingsPage() {
         
         // Fetch and set other user data from Firestore
         if (db) {
-            const userDocRef = doc(db, 'users', currentUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                setPersona(userDoc.data().persona || '');
-                setEmailNotifications(userDoc.data().emailNotifications || false);
+            try {
+              const userDocRef = doc(db, 'users', currentUser.uid);
+              const userDoc = await getDoc(userDocRef);
+              if (userDoc.exists()) {
+                  setPersona(userDoc.data().persona || '');
+                  setEmailNotifications(userDoc.data().emailNotifications || false);
+              }
+            } catch (error) {
+              handleError(error, 'Failed to load user profile');
             }
         }
       }
@@ -133,7 +158,7 @@ export function SettingsPage() {
       setUser({ ...user, displayName: name, photoURL: newPhotoURL } as User);
       toast({ title: 'Success', description: "Account updated successfully!" });
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message || "An unexpected error occurred.", variant: 'destructive' });
+      handleError(error, 'Failed to update account');
     } finally {
       setIsSaving(false);
     }
@@ -148,7 +173,7 @@ export function SettingsPage() {
       await updateDoc(userDocRef, { persona });
       toast({ title: 'Success', description: 'Agent persona updated!' });
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      handleError(error, 'Failed to save persona');
     } finally {
       setIsSaving(false);
     }
@@ -161,7 +186,7 @@ export function SettingsPage() {
       await deleteAllConversationsForUser(user.uid);
       toast({ title: 'Success', description: 'Your chat history has been cleared.' });
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      handleError(error, 'Failed to clear history');
     } finally {
       setIsSaving(false);
     }
@@ -174,7 +199,7 @@ export function SettingsPage() {
       await unarchiveAllConversationsForUser(user.uid);
       toast({ title: 'Success', description: 'All archived chats have been restored.' });
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      handleError(error, 'Failed to restore chats');
     } finally {
       setIsSaving(false);
     }
@@ -190,7 +215,7 @@ export function SettingsPage() {
     } catch (error: any) {
       // Revert on failure
       setEmailNotifications(!checked);
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      handleError(error, 'Failed to save preferences');
     }
   };
 

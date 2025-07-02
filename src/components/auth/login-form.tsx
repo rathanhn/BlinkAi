@@ -18,6 +18,7 @@ import { Logo, GoogleIcon } from '@/components/icons';
 import { auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '../ui/toast';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -25,6 +26,23 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  const handleError = (error: any) => {
+    const errorMessage = error.message || 'An unknown error occurred.';
+    toast({
+      title: 'Login Failed',
+      description: errorMessage,
+      variant: 'destructive',
+      action: (
+        <ToastAction
+          altText="Report Error"
+          onClick={() => router.push(`/feedback?error=${encodeURIComponent(errorMessage)}&type=bug`)}
+        >
+          Report
+        </ToastAction>
+      ),
+    });
+  };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -40,7 +58,7 @@ export function LoginForm() {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/chat');
     } catch (error: any) {
-      toast({ title: 'Login Failed', description: error.message, variant: 'destructive' });
+      handleError(error);
     } finally {
       setLoading(false);
     }
@@ -58,7 +76,7 @@ export function LoginForm() {
       await signInWithPopup(auth, provider);
       router.push('/chat');
     } catch (error: any) {
-      toast({ title: 'Google Sign-In Failed', description: error.message, variant: 'destructive' });
+      handleError(error);
     } finally {
       setLoading(false);
     }

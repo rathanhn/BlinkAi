@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { submitFeedback, type FeedbackType } from '@/lib/chat-service';
 import { auth } from '@/lib/firebase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export function FeedbackForm() {
   const [feedbackType, setFeedbackType] = useState<FeedbackType>('general');
@@ -32,6 +33,18 @@ export function FeedbackForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const error = searchParams.get('error');
+    const type = searchParams.get('type');
+    if (error) {
+      setFeedbackText(`I encountered an error:\n\n${error}`);
+    }
+    if (type) {
+      setFeedbackType(type as FeedbackType);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -62,6 +75,7 @@ export function FeedbackForm() {
         description: "Thank you for helping us improve BlinkAi.",
       });
       setFeedbackText('');
+      router.push('/chat');
     } catch (error: any) {
       toast({
         title: 'Submission Failed',
