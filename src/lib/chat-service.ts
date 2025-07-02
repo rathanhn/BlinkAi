@@ -13,6 +13,7 @@ import {
   Timestamp,
   getDoc,
   writeBatch,
+  onSnapshot,
 } from 'firebase/firestore';
 import { summarizeConversation } from '@/ai/flows/summarize-conversation';
 import { processFeedback, ProcessFeedbackOutput } from '@/ai/flows/process-feedback-flow';
@@ -100,13 +101,29 @@ export async function getArchivedConversations(userId: string): Promise<Conversa
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation));
 }
 
-// Get all messages for a conversation
-export async function getMessages(conversationId: string): Promise<Message[]> {
-  if (!db) throw new Error("Firestore is not initialized.");
+// Get all messages for a conversation with real-time updates
+export function getMessages(
+    conversationId: string, 
+    callback: (messages: Message[]) => void,
+    onError: (error: Error) => void
+): () => void {
+  if (!db) {
+    const error = new Error("Firestore is not initialized.");
+    onError(error);
+    return () => {};
+  }
   const messagesRef = collection(db, 'conversations', conversationId, 'messages');
   const q = query(messagesRef, orderBy('timestamp', 'asc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+
+  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const messages = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+    callback(messages);
+  }, (error) => {
+    console.error("Error fetching real-time messages:", error);
+    onError(error);
+  });
+
+  return unsubscribe;
 }
 
 // Add a new message to a conversation
@@ -115,8 +132,9 @@ export async function addMessage(conversationId: string, message: Omit<Message, 
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
     const conversationRef = doc(db, 'conversations', conversationId);
     
-    await addDoc(messagesRef, { ...message, timestamp: serverTimestamp() });
+    const docRef = await addDoc(messagesRef, { ...message, timestamp: serverTimestamp() });
     await updateDoc(conversationRef, { lastUpdated: serverTimestamp() });
+    return docRef;
 }
 
 // Start a new conversation
@@ -157,20 +175,26 @@ export async function updateConversationTitle(conversationId: string, firstUserI
 export async function updateMessageReaction(conversationId: string, messageId: string, reaction: string, userId: string) {
   if (!db) throw new Error("Firestore is not initialized.");
   const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
-  const messageSnap = await getDoc(messageRef);
+  
+  try {
+    const messageSnap = await getDoc(messageRef);
 
-  if (messageSnap.exists()) {
-    const msgData = messageSnap.data();
-    const reactions = msgData.reactions || {};
-    const userList: string[] = reactions[reaction] || [];
-    
-    if (userList.includes(userId)) {
-      reactions[reaction] = userList.filter(uid => uid !== userId);
-    } else {
-      reactions[reaction] = [...userList, userId];
+    if (messageSnap.exists()) {
+        const msgData = messageSnap.data();
+        const reactions = msgData.reactions || {};
+        const userList: string[] = reactions[reaction] || [];
+        
+        if (userList.includes(userId)) {
+        reactions[reaction] = userList.filter(uid => uid !== userId);
+        } else {
+        reactions[reaction] = [...userList, userId];
+        }
+        
+        await updateDoc(messageRef, { reactions });
     }
-    
-    await updateDoc(messageRef, { reactions });
+  } catch (error) {
+      console.error("Failed to update reaction:", error)
+      throw error;
   }
 }
 
@@ -198,7 +222,6 @@ export async function deleteConversation(conversationId: string) {
         await batch.commit();
     } catch (error) {
         console.error("Error deleting conversation:", error);
-        // Re-throwing the error to be caught by the calling component
         if (error instanceof Error) {
             throw new Error(`Failed to delete messages: ${error.message}`);
         }

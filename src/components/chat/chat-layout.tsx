@@ -43,7 +43,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { TooltipProvider } from '../ui/tooltip';
@@ -52,17 +51,15 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
-import { usePathname } from 'next/navigation';
 import { onSnapshot, query, collection, where, orderBy } from 'firebase/firestore';
+import { AnimatePresence, motion } from 'framer-motion';
 
 
 const getSafeTime = (date: any): number => {
     if (!date) return 0;
-    // Firestore Timestamp
     if (typeof date.toDate === 'function') {
         return date.toDate().getTime();
     }
-    // JS Date object
     if (typeof date.getTime === 'function') {
         return date.getTime();
     }
@@ -77,12 +74,10 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [activeConversations, setActiveConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [isTempChatActive, setIsTempChatActive] = useState(false);
   const isInitialLoad = useRef(true);
   const router = useRouter();
   const { toast } = useToast();
-  const pathname = usePathname();
-
-  const isTempChat = !conversationId;
 
   const handleError = (error: any, title: string) => {
     const errorMessage = error.message || 'An unknown error occurred.';
@@ -182,7 +177,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
       toast({ title: 'Error', description: 'You must be logged in to start a new chat.', variant: 'destructive' });
       return;
     }
-    router.push('/chat');
+    try {
+        const newConversation = await startNewConversation(user.uid);
+        router.push(`/chat/${newConversation.id}`);
+    } catch (error) {
+        handleError(error, 'Could not start new chat');
+    }
   };
 
   const handleTitleUpdate = (convoId: string, newTitle: string) => {
@@ -214,7 +214,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         await deleteConversation(convoId);
         toast({ title: "Conversation Deleted" });
 
-        // If we deleted the chat we are currently on
         if (conversationId === convoId) {
             const allRemainingConversations = [...activeConversations, ...archivedConversations]
                 .filter(c => c.id !== convoId)
@@ -247,7 +246,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                     router.push('/chat');
                 }
               }
-          } else { // un-archive
+          } else { 
               toast({ title: "Conversation Restored" });
               router.push(`/chat/${convo.id}`);
           }
@@ -255,21 +254,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
         handleError(error, 'Could not update conversation');
       }
   };
-
-  const handleToggleTempChat = (checked: boolean) => {
-    if (checked) {
-      router.push('/chat');
-    } else if (activeConversations.length > 0) {
-      const mostRecentConversation = [...activeConversations, ...archivedConversations].sort((a, b) => getSafeTime(b.lastUpdated) - getSafeTime(a.lastUpdated))[0];
-      if (mostRecentConversation) {
-        router.push(`/chat/${mostRecentConversation.id}`);
-      } else {
-        router.push('/chat');
-      }
-    } else {
-        router.push('/chat');
-    }
-  }
 
   const renderConversation = (convo: Conversation) => (
       <SidebarMenuItem key={convo.id} className="relative group/item">
@@ -396,8 +380,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                         </Label>
                         <Switch
                             id="temp-chat-toggle"
-                            checked={isTempChat}
-                            onCheckedChange={handleToggleTempChat}
+                            checked={isTempChatActive}
+                            onCheckedChange={setIsTempChatActive}
                         />
                     </div>
                     <SidebarMenuButton onClick={handleNewChat} className="w-full">
@@ -407,7 +391,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 </div>
               </SidebarMenuItem>
               <SidebarSeparator />
-              <div className={cn("space-y-1 transition-opacity", isTempChat && "opacity-50 pointer-events-none")}>
+              <div className={cn("space-y-1 transition-opacity", isTempChatActive && "opacity-50 pointer-events-none")}>
                 {loadingConversations ? (
                    <div className="p-2 space-y-2">
                       <SidebarMenuSkeleton showIcon />
@@ -483,24 +467,48 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                   </DropdownMenu>
                 )}
             </header>
-            <main className='flex-1 flex flex-col overflow-hidden'>
-            {user && userProfile ? (
-              <Chat 
-                conversationId={conversationId} 
-                isTempChat={isTempChat}
-                user={user} 
-                userProfile={userProfile}
-                onTitleUpdate={handleTitleUpdate} 
-                setActiveConversations={setActiveConversations}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <Logo className="w-20 h-20 text-primary mb-4" />
-                <h2 className="text-2xl font-semibold">Welcome to BlinkAi</h2>
-                <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
-              </div>
-            )}
-            </main>
+            <div className="relative flex-1 flex flex-col overflow-hidden">
+                <main className='flex-1 flex flex-col overflow-hidden'>
+                {user && userProfile ? (
+                  <Chat 
+                    key={conversationId || 'welcome'}
+                    conversationId={conversationId} 
+                    isTempChat={false}
+                    user={user} 
+                    userProfile={userProfile}
+                    onTitleUpdate={handleTitleUpdate} 
+                    setActiveConversations={setActiveConversations}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <Logo className="w-20 h-20 text-primary mb-4" />
+                    <h2 className="text-2xl font-semibold">Welcome to BlinkAi</h2>
+                    <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
+                  </div>
+                )}
+                </main>
+
+                <AnimatePresence>
+                    {isTempChatActive && user && userProfile && (
+                        <motion.div
+                            className="absolute inset-0 z-10 bg-background flex flex-col"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2, ease: "easeInOut" }}
+                        >
+                             <Chat
+                                key="temp-chat-overlay"
+                                isTempChat={true}
+                                user={user}
+                                userProfile={userProfile}
+                                onTitleUpdate={() => {}}
+                                setActiveConversations={() => {}}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
         </SidebarInset>
       </div>
     </TooltipProvider>

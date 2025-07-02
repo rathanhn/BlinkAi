@@ -1,7 +1,6 @@
 
 "use client";
 
-// Temporary chat messages are stored in RAM and not persisted to the database.
 import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, startNewConversation, type Conversation, Timestamp, UserProfile } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -31,7 +30,6 @@ interface Message {
 export function Chat({ 
   conversationId,
   isTempChat,
-
   user,
   userProfile,
   onTitleUpdate,
@@ -45,7 +43,6 @@ export function Chat({
   setActiveConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [tempMessages, setTempMessages] = useState<Message[]>([]); // State for temporary chat messages
   const [input, setInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
@@ -79,42 +76,37 @@ export function Chat({
   };
 
   useEffect(() => {
-    console.log('useEffect [conversationId, isTempChat, tempMessages]:', { isTempChat, conversationId, tempMessagesLength: tempMessages.length, messagesLength: messages.length });
     if (isTempChat) {
+        setMessages([]);
         setLoading(false);
         return;
     }
+
     if (conversationId) {
         setLoading(true);
-        getMessages(conversationId)
-            .then((history) => {
-                const serializableHistory = history.map(msg => ({
-                    ...msg,
-                    timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
-                }));
-                setMessages(serializableHistory);
-            })
-            .catch(err => {
-                handleError(err, 'Failed to load message history.');
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    } else if (!conversationId) {
-        // If not temp chat and no conversation ID, clear messages
+        const unsubscribe = getMessages(conversationId, (history) => {
+            const serializableHistory = history.map(msg => ({
+                ...msg,
+                timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
+            }));
+            setMessages(serializableHistory);
+            setLoading(false);
+        }, (err) => {
+            handleError(err, 'Failed to load message history.');
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    } else {
         setMessages([]);
         setLoading(false);
     }
-  }, [conversationId, isTempChat, tempMessages]); // Add tempMessages to dependencies
+  }, [conversationId, isTempChat]);
 
   useEffect(() => {
-    console.log('useEffect [messages, loading]: Updating messages state for display or scrolling', { isTempChat, messagesLength: messages.length });
-    // Update messages state to reflect tempMessages when in a temporary chat
-    if (isTempChat) {
-      setMessages(tempMessages);
+    if (!loading) {
+      scrollToBottom();
     }
-    if (!loading) scrollToBottom();
-  }, [messages]);
+  }, [messages, loading]);
 
   useEffect(() => {
     if (replyingTo) {
@@ -128,9 +120,8 @@ export function Chat({
     const userInput = input.trim();
     if (!userInput || isPending) return;
 
-    console.log('handleSubmit: Before state updates', { isTempChat, tempMessagesLength: tempMessages.length, messagesLength: messages.length });
-    const isFirstMessage = messages.length === 0;
-    // Optimistically add user message to UI for responsiveness
+    const isFirstMessageInPermChat = !isTempChat && conversationId && messages.length === 0;
+
     const tempUserMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -138,92 +129,52 @@ export function Chat({
       timestamp: new Date(),
       ...(replyingTo && { replyTo: replyingTo.id }),
     };
+
+    const optimisticMessages = [...messages, tempUserMessage];
+    setMessages(optimisticMessages);
     
-    console.log('handleSubmit: Optimistically adding user message to tempMessages (if temp chat)', { isTempChat, messageContent: tempUserMessage.content });
+    setInput("");
+    setReplyingTo(null);
+
     startTransition(async () => {
- try {
- if (isTempChat && isFirstMessage) {
- // If it's the first message in a temporary chat, create a new permanent conversation
- console.log('handleSubmit: Starting new permanent conversation from temp chat');
- const newConversation = await startNewConversation(user.uid, userInput);
- router.replace(`/chat/${newConversation.id}`);
- // Do not proceed with optimistic updates and AI response in this transition
- // The useEffect for conversationId will handle loading the new chat
- return;
- }
- // Add the optimistic user message to the state used for display
-        const updateState = isTempChat ? setTempMessages : setMessages;
-        updateState(prev => [...prev, tempUserMessage]);
-        const personaInfo = `The user's name is ${userProfile.displayName}.
-        ${userProfile.persona ? `\nCustom Persona Instructions:\n${userProfile.persona}` : ''}`;
+        try {
+            const personaInfo = `The user's name is ${userProfile.displayName}. ${userProfile.persona ? `\nCustom Persona Instructions:\n${userProfile.persona}` : ''}`;
+            const aiResponse = await generateChatResponse({ userInput, personaInformation: personaInfo });
 
-        console.log('handleSubmit: Optimistically adding user message to display state (messages)', { messageContent: tempUserMessage.content });
-        // Add the optimistic user message to the display state (messages)
-        setMessages(prev => [...prev, tempUserMessage]);
-        setInput("");
-        setReplyingTo(null);
-        const aiResponse = await generateChatResponse({ userInput, personaInformation: personaInfo });
+            if (!aiResponse.aiResponse) {
+              throw new Error('Failed to get AI response');
+            }
 
-        if (!aiResponse.aiResponse) {
-          throw new Error('Failed to get AI response');
+            const tempAiMessage: Message = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: aiResponse.aiResponse,
+                timestamp: new Date(),
+            };
+            
+            setMessages(prev => [...prev, tempAiMessage]);
+
+            if (!isTempChat && conversationId) {
+                const newUserMessage: Omit<Message, 'id' | 'timestamp'> = { role: "user", content: userInput, ...(replyingTo && { replyTo: replyingTo.id }) };
+                await addMessage(conversationId, newUserMessage);
+
+                const aiMessage: Omit<Message, 'id' | 'timestamp'> = { role: "assistant", content: aiResponse.aiResponse };
+                await addMessage(conversationId, aiMessage);
+                
+                if (isFirstMessageInPermChat) {
+                    const summary = await updateConversationTitle(conversationId, userInput);
+                    if (summary) onTitleUpdate(conversationId, summary);
+                }
+            }
+        } catch (error) {
+            handleError(error, 'Failed to send message');
+            setMessages(messages);
         }
-
-        // Optimistically add AI response to UI
-        const tempAiMessage: Message = {
- id: crypto.randomUUID(),
- role: "assistant",
- content: aiResponse.aiResponse,
- timestamp: new Date(),
-        };
-        console.log('handleSubmit: Optimistically adding AI message to display state (messages)', { messageContent: tempAiMessage.content });
-        setMessages((prev) => [...prev, tempAiMessage]);
-
-        // If it's a permanent chat, save messages to Firestore in the background.
-        if (!isTempChat && conversationId) {
-            // The optimistic user message added earlier was just for immediate UI update.
-            // Now we'll add the actual message to Firestore.
-          const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
-            role: "user",
-            content: userInput,
-            ...(replyingTo && { replyTo: replyingTo.id }),
-          };
-          const userMessageRef = await addMessage(conversationId, newUserMessage);
-
-          const aiMessage: Omit<Message, 'id' | 'timestamp'> = {
-            role: "assistant",
-            content: aiResponse.aiResponse,
-          };
-          const aiMessageRef = await addMessage(conversationId, aiMessage);
-          
-          // If it was the first message in a new permanent chat, summarize for title
-          if (isFirstMessage) {
-              const summary = await updateConversationTitle(conversationId, userInput);
-              if (summary) {
-                onTitleUpdate(conversationId, summary);
-              }
-          }
-        } else if (isTempChat) {
- console.log('handleSubmit: Updating tempMessages with AI response', { messageContent: tempAiMessage.content });
- // If it's a temporary chat, update the local tempMessages state with the AI response.
- setTempMessages(prev => [...prev, tempAiMessage]);
-        }
-      } catch (error) {
-        handleError(error, 'Failed to send message');
-        // On failure, remove the optimistic user message
- setMessages(prev => prev.filter(msg => msg.id !== tempUserMessage.id));
- console.log('handleSubmit: Removing optimistic user message from tempMessages (if temp chat) on error', { isTempChat });
- if (isTempChat) {
- setTempMessages(prev => prev.filter(msg => msg.id !== tempUserMessage.id));
- }
-      }
     });
   };
 
   const handleReaction = async (messageId: string, reaction: string) => {
-    if (!user || !conversationId) return;
-    console.log('handleReaction:', { isTempChat, messageId, reaction });
-    
-    if (isTempChat) return; // Do nothing for temporary chats
+    if (!user || !conversationId || isTempChat) return;
 
     const newMessages = messages.map(msg => {
       if (msg.id === messageId) {
@@ -244,16 +195,6 @@ export function Chat({
       await updateMessageReaction(conversationId, messageId, reaction, user.uid);
     } catch(e) {
       handleError(e, 'Failed to save reaction');
-      // Re-fetch to correct UI on error
-      if (conversationId) {
-        getMessages(conversationId).then(history => {
-            const serializableHistory = history.map(msg => ({
-                ...msg,
-                timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
-            }));
-            setMessages(serializableHistory);
-        });
-      }
     }
   };
   
@@ -287,7 +228,7 @@ export function Chat({
   return (
     <div className={cn(
         "flex flex-col flex-1 h-full",
- isPending && !isTempChat && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
+        isPending && !isTempChat && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
@@ -300,7 +241,7 @@ export function Chat({
                     </h2>
                     <p className="text-muted-foreground max-w-sm mx-auto">
                         {isTempChat 
-                            ? "Messages in this chat are not saved to your history and will be lost when you close or reload the page."
+                            ? "Messages in this chat are not saved and will be lost. Toggle off to return to your saved conversations."
                             : "Your conversation will be saved automatically."}
                     </p>
                 </div>
@@ -383,7 +324,7 @@ export function Chat({
       </div>
       <div className={cn(
           "p-4 border-t bg-card shrink-0",
- isPending && !isTempChat && "bg-transparent border-transparent"
+          isPending && !isTempChat && "bg-transparent border-transparent"
         )}>
         <AnimatePresence>
         {replyingTo && (
@@ -433,5 +374,3 @@ export function Chat({
     </div>
   );
 }
-
-    
