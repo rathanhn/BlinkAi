@@ -150,17 +150,24 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const handleDelete = async (convoId: string) => {
     try {
         await deleteConversation(convoId);
-        setActiveConversations(prev => prev.filter(c => c.id !== convoId));
+        const newActiveConversations = activeConversations.filter(c => c.id !== convoId);
+        setActiveConversations(newActiveConversations);
         setArchivedConversations(prev => prev.filter(c => c.id !== convoId));
         toast({ title: "Conversation Deleted" });
+
         if (conversationId === convoId) {
-            router.push('/chat');
+            // If there are other chats, navigate to the first one. Otherwise, go to temp chat.
+            if (newActiveConversations.length > 0) {
+                router.push(`/chat/${newActiveConversations[0].id}`);
+            } else {
+                router.push('/chat');
+            }
         }
     } catch (error) {
         console.error("Error deleting conversation:", error);
         toast({ title: 'Error', description: 'Could not delete conversation.', variant: 'destructive' });
     }
-  };
+};
 
   const handleArchiveToggle = async (convo: Conversation, shouldArchive: boolean) => {
       try {
@@ -397,5 +404,3 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     </SidebarProvider>
   );
 }
-
-    

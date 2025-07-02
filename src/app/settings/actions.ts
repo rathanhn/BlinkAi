@@ -41,7 +41,7 @@ export async function uploadProfilePicture(formData: FormData) {
     return { success: true, url: result.secure_url };
 
   } catch (error) {
-    console.error('Upload Error:', error);
+    console.error('[ACTION FAILED: uploadProfilePicture]:', error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during upload.";
     return { success: false, error: `Upload failed: ${errorMessage}` };
   }
@@ -56,6 +56,7 @@ export async function updateUserPersona(userId: string, persona: string) {
         await updateDoc(userDocRef, { persona });
         return { success: true };
     } catch (error: any) {
+        console.error('[ACTION FAILED: updateUserPersona]:', error);
         return { success: false, error: error.message };
     }
 }
@@ -69,6 +70,7 @@ export async function updateUserPreferences(userId: string, preferences: { email
         await updateDoc(userDocRef, preferences);
         return { success: true };
     } catch (error: any) {
+        console.error('[ACTION FAILED: updateUserPreferences]:', error);
         return { success: false, error: error.message };
     }
 }
@@ -81,6 +83,7 @@ export async function clearAllConversations(userId: string) {
         await deleteAllConversationsForUser(userId);
         return { success: true };
     } catch (error: any) {
+        console.error('[ACTION FAILED: clearAllConversations]:', error);
         return { success: false, error: error.message };
     }
 }
@@ -94,6 +97,7 @@ export async function unarchiveAllConversations(userId: string) {
         await unarchiveAllConversationsForUser(userId);
         return { success: true };
     } catch (error: any) {
+        console.error('[ACTION FAILED: unarchiveAllConversations]:', error);
         return { success: false, error: error.message };
     }
 }
