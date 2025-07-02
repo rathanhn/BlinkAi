@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -65,6 +64,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
 
   const isTempChat = !conversationId;
 
+  // --- ADDED FOR DEBUGGING ---
+  console.log(`%c--- ChatLayout Render ---`, 'color: #007acc; font-weight: bold;');
+  console.log(`conversationId: ${conversationId}`);
+  console.log(`isTempChat: ${isTempChat}`);
+  // --- END DEBUGGING ---
+
   const handleError = (error: any, title: string) => {
     const errorMessage = error.message || 'An unknown error occurred.';
     toast({
@@ -107,6 +112,9 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
   // This effect should only run once when the user logs in.
   useEffect(() => {
     if (user) {
+      // --- ADDED FOR DEBUGGING ---
+      console.log('%c--- useEffect [user] running ---', 'color: #2E8B57');
+      // --- END DEBUGGING ---
       setLoadingConversations(true);
       // Fetch all conversations
       Promise.all([
@@ -120,6 +128,9 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           // This check is now safe because this effect only runs once on user load.
           // It redirects if the app loads on the base URL without a specific chat open.
           if (!conversationId && activeConvos.length > 0) {
+            // --- ADDED FOR DEBUGGING ---
+            console.log(`%c--- REDIRECTING to most recent chat: ${activeConvos[0].id} ---`, 'color: #FF5733');
+            // --- END DEBUGGING ---
             router.replace(`/chat/${activeConvos[0].id}`);
           }
       }).catch(err => {
@@ -369,12 +380,16 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             id="temp-chat-toggle"
                             checked={isTempChat}
                             onCheckedChange={(checked) => {
+                                // --- ADDED FOR DEBUGGING ---
+                                console.log('%c--- Switch Toggled ---', 'color: #DAA520');
+                                console.log(`New checked state: ${checked}`);
+                                // --- END DEBUGGING ---
                                 if (checked) {
                                     router.push('/chat');
                                 } else if (activeConversations.length > 0) {
                                     router.push(`/chat/${activeConversations[0].id}`);
                                 } else {
-                                    router.push('/chat'); // Fallback to new chat page if no active chats exist
+                                    router.push('/chat');
                                 }
                             }}
                         />

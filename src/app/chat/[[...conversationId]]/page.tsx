@@ -1,4 +1,3 @@
-
 import { ChatLayout } from '@/components/chat/chat-layout';
 
 // This page handles both the base /chat route and /chat/[conversationId] routes.
@@ -9,7 +8,7 @@ export default async function ChatPage({ params }: { params: { conversationId?: 
   // When the route is /chat/123, conversationId will be ['123']. We take the first element.
   const conversationId = awaitedParams.conversationId?.[0];
   
-  // The ChatLayout and its children are designed to react to changes in conversationId
-  // without needing a key to force a remount. Removing the key fixes the temp chat toggle issue.
-  return <ChatLayout conversationId={conversationId} />;
+  // By adding a key, we ensure ChatLayout remounts when the conversationId changes.
+  // This is currently needed to ensure the temporary chat state is handled correctly.
+  return <ChatLayout key={conversationId} conversationId={conversationId} />;
 }
