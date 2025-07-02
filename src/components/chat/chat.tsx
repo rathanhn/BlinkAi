@@ -1,7 +1,7 @@
 
 "use client";
 
-import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp, UserProfile, startNewConversation } from "@/lib/chat-service";
+import { addMessage, getMessages, updateMessageReaction, updateConversationTitle, type Conversation, Timestamp, UserProfile } from "@/lib/chat-service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,13 +28,15 @@ interface Message {
 }
 
 export function Chat({ 
-  conversationId, 
+  conversationId,
+  isTempChat,
   user,
   userProfile,
   onTitleUpdate,
   setActiveConversations
 }: { 
-  conversationId?: string; 
+  conversationId?: string;
+  isTempChat: boolean;
   user: FirebaseUser;
   userProfile: UserProfile;
   onTitleUpdate: (id: string, title: string) => void;
@@ -48,7 +50,6 @@ export function Chat({
   const { toast } = useToast();
   const router = useRouter();
 
-  const isTempChat = !conversationId;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,27 +76,31 @@ export function Chat({
   };
 
   useEffect(() => {
-    if (!conversationId) {
+    if (isTempChat) {
         setMessages([]);
         setLoading(false);
         return;
     }
-    setLoading(true);
-    getMessages(conversationId)
-        .then((history) => {
-            const serializableHistory = history.map(msg => ({
-                ...msg,
-                timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
-            }));
-            setMessages(serializableHistory);
-        })
-        .catch(err => {
-            handleError(err, 'Failed to load message history.');
-        })
-        .finally(() => {
-            setLoading(false);
-        });
-  }, [conversationId]);
+    if (conversationId) {
+        setLoading(true);
+        getMessages(conversationId)
+            .then((history) => {
+                const serializableHistory = history.map(msg => ({
+                    ...msg,
+                    timestamp: (msg.timestamp as unknown as Timestamp).toDate(),
+                }));
+                setMessages(serializableHistory);
+            })
+            .catch(err => {
+                handleError(err, 'Failed to load message history.');
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    } else {
+        setLoading(false);
+    }
+  }, [conversationId, isTempChat]);
 
   useEffect(() => {
     scrollToBottom();
@@ -113,77 +118,67 @@ export function Chat({
     const userInput = input.trim();
     if (!userInput || isPending) return;
 
-    let currentConvoId = conversationId;
-    
+    const isFirstMessage = messages.length === 0;
+
+    // Optimistically add user message to UI for responsiveness
     const tempUserMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
       content: userInput,
       timestamp: new Date(),
       ...(replyingTo && { replyTo: replyingTo.id }),
-    }
+    };
     
+    setMessages((prev) => [...prev, tempUserMessage]);
     setInput("");
     setReplyingTo(null);
-    setMessages((prev) => [...prev, tempUserMessage]);
-    
+
     startTransition(async () => {
       try {
-        let wasNewChat = false;
-        
-        // If it's a temp chat, create a new conversation first
-        if (!currentConvoId) {
-          wasNewChat = true;
-          const newConversation = await startNewConversation(user.uid);
-          currentConvoId = newConversation.id;
-          
-          const serializableConvo = {
-              ...newConversation,
-              lastUpdated: (newConversation.lastUpdated as Timestamp).toDate()
-          };
-          setActiveConversations(prev => [serializableConvo as any, ...prev]);
-          router.push(`/chat/${currentConvoId}`);
-        }
-        
-        const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
-          role: "user",
-          content: userInput,
-          ...(replyingTo && { replyTo: replyingTo.id }),
-        };
-
-        await addMessage(currentConvoId, newUserMessage);
-
         const personaInfo = `The user's name is ${userProfile.displayName}.
         ${userProfile.persona ? `\nCustom Persona Instructions:\n${userProfile.persona}` : ''}`;
         
         const aiResponse = await generateChatResponse({ userInput, personaInformation: personaInfo });
 
-        if (aiResponse.aiResponse) {
+        if (!aiResponse.aiResponse) {
+          throw new Error('Failed to get AI response');
+        }
+
+        // Optimistically add AI response to UI
+        const tempAiMessage: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: aiResponse.aiResponse,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, tempAiMessage]);
+
+        // If it's a permanent chat, save messages to Firestore in the background.
+        if (!isTempChat && conversationId) {
+          const newUserMessage: Omit<Message, 'id' | 'timestamp'> = {
+            role: "user",
+            content: userInput,
+            ...(replyingTo && { replyTo: replyingTo.id }),
+          };
+          await addMessage(conversationId, newUserMessage);
+
           const aiMessage: Omit<Message, 'id' | 'timestamp'> = {
             role: "assistant",
             content: aiResponse.aiResponse,
           };
+          await addMessage(conversationId, aiMessage);
           
-          await addMessage(currentConvoId, aiMessage);
-          
-          if (wasNewChat) {
-              const summary = await updateConversationTitle(currentConvoId, userInput);
+          // If it was the first message in a new permanent chat, summarize for title
+          if (isFirstMessage) {
+              const summary = await updateConversationTitle(conversationId, userInput);
               if (summary) {
-                onTitleUpdate(currentConvoId, summary);
+                onTitleUpdate(conversationId, summary);
               }
           }
-
-          const tempAiMessage: Message = {
-            ...(aiMessage as Message),
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-          }
-          setMessages((prev) => [...prev.filter(m => m.id !== tempUserMessage.id), tempUserMessage, tempAiMessage]);
-        } else {
-          throw new Error('Failed to get AI response');
         }
       } catch (error) {
         handleError(error, 'Failed to send message');
+        // On failure, remove the optimistic user message
         setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMessage.id));
       }
     });
@@ -259,6 +254,19 @@ export function Chat({
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 md:p-6 space-y-6">
+            {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <Logo className="w-20 h-20 text-primary mb-4" />
+                    <h2 className="text-2xl font-semibold">
+                        {isTempChat ? "Temporary Chat" : "Send a message"}
+                    </h2>
+                    <p className="text-muted-foreground max-w-sm mx-auto">
+                        {isTempChat 
+                            ? "Messages in this chat are not saved to your history and will be lost when you close or reload the page."
+                            : "Your conversation will be saved automatically."}
+                    </p>
+                </div>
+            )}
             {messages.map((message) => (
               <motion.div
                 key={message.id}
@@ -362,7 +370,7 @@ export function Chat({
         <form id="chat-form" onSubmit={handleSubmit} className="flex items-center gap-4">
           <Textarea
             ref={textareaRef}
-            placeholder={isTempChat ? "Start a new conversation..." : "Type your message..."}
+            placeholder={isTempChat ? "Start a temporary conversation..." : "Type your message..."}
             className={cn("flex-1 resize-none min-h-[40px] max-h-48",
               replyingTo && "rounded-t-none",
               isPending && "bg-background/50 placeholder:text-foreground/80"
@@ -387,3 +395,5 @@ export function Chat({
     </div>
   );
 }
+
+    

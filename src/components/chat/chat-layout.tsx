@@ -52,7 +52,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { logout } from '@/app/auth/actions';
 import { ToastAction } from '../ui/toast';
-import { SheetTitle } from '../ui/sheet';
+import { SheetDescription, SheetTitle } from '../ui/sheet';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -422,7 +422,11 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                         <span className="sr-only">Toggle Menu</span>
                     </Button>
                 </SidebarTrigger>
-                <div className="flex-1">
+                 <div className="flex-1">
+                    <VisuallyHidden>
+                        <SheetTitle>BlinkAi Chat Menu</SheetTitle>
+                        <SheetDescription>A list of your conversations and actions.</SheetDescription>
+                    </VisuallyHidden>
                 </div>
                 {user && (
                    <DropdownMenu>
@@ -471,6 +475,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               <Chat 
                 key={conversationId}
                 conversationId={conversationId} 
+                isTempChat={isTempChat}
                 user={user} 
                 userProfile={userProfile}
                 onTitleUpdate={handleTitleUpdate} 
@@ -490,5 +495,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     </SidebarProvider>
   );
 }
+
+    
 
     
