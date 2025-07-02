@@ -49,6 +49,8 @@ import {
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { TooltipProvider } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 export function ChatLayout({ conversationId }: { conversationId?: string }) {
   const [user, setUser] = useState<User | null>(null);
@@ -258,7 +260,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                          </Avatar>
                        </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-56">
                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
                        <DropdownMenuSeparator />
                        <DropdownMenuItem asChild>
@@ -281,12 +283,23 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <div className="flex flex-col gap-2 p-2">
-                    <SidebarMenuButton asChild variant={isTempChat ? "secondary" : "default"} className="w-full">
-                        <Link href="/chat">
-                            <FlaskConical className="mr-2" />
+                    <div className="flex items-center justify-between rounded-md border px-3 h-10">
+                        <Label htmlFor="temp-chat-toggle" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                            <FlaskConical />
                             Temporary Chat
-                        </Link>
-                    </SidebarMenuButton>
+                        </Label>
+                        <Switch
+                            id="temp-chat-toggle"
+                            checked={isTempChat}
+                            onCheckedChange={(checked) => {
+                                if (checked) {
+                                    router.push('/chat');
+                                } else if (isTempChat) { // Only switch if currently in temp chat
+                                    handleNewChat();
+                                }
+                            }}
+                        />
+                    </div>
                     <SidebarMenuButton onClick={handleNewChat} className="w-full">
                       <Plus className="mr-2" />
                       New Chat
@@ -325,7 +338,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
           </SidebarContent>
         </Sidebar>
         <SidebarInset>
-            <header className="flex h-14 items-center gap-4 border-b bg-card px-4 md:hidden">
+            <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-card px-4 md:hidden">
                 <SidebarTrigger asChild>
                     <Button size="icon" variant="outline">
                         <Logo className="h-6 w-6" />
@@ -343,7 +356,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                          </Avatar>
                        </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-56">
                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
                        <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
@@ -360,6 +373,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                   </DropdownMenu>
                 )}
             </header>
+            <main className='flex-1 flex flex-col overflow-hidden'>
             {user && userProfile ? (
               <Chat 
                 key={conversationId}
@@ -376,9 +390,12 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
               </div>
             )}
+            </main>
         </SidebarInset>
       </div>
     </TooltipProvider>
     </SidebarProvider>
   );
 }
+
+    

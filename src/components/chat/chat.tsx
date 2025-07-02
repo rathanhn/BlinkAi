@@ -225,7 +225,7 @@ export function Chat({
 
   return (
     <div className={cn(
-        "flex flex-col flex-1 overflow-hidden",
+        "flex flex-col flex-1 h-full",
         isPending && "bg-breathing-gradient-bg bg-200% animate-breathing-gradient"
       )}>
       <div className="flex-1 overflow-hidden">
@@ -308,7 +308,7 @@ export function Chat({
         </ScrollArea>
       </div>
       <div className={cn(
-          "p-4 border-t bg-card",
+          "p-4 border-t bg-card shrink-0",
           isPending && "bg-transparent border-transparent"
         )}>
         <AnimatePresence>
@@ -359,3 +359,5 @@ export function Chat({
     </div>
   );
 }
+
+    
