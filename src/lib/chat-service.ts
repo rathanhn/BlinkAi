@@ -43,6 +43,7 @@ export interface UserProfile {
     email: string;
     photoURL?: string;
     persona?: string;
+    emailNotifications?: boolean;
 }
 
 

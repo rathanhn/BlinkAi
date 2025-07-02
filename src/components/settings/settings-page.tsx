@@ -20,8 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '../ui/skeleton';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { uploadProfilePicture, updateUserPersona, clearAllConversations, unarchiveAllConversations } from '@/app/settings/actions';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { uploadProfilePicture, updateUserPersona, clearAllConversations, unarchiveAllConversations, updateUserPreferences } from '@/app/settings/actions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from '../ui/textarea';
 import {
@@ -55,6 +55,9 @@ export function SettingsPage() {
   // Agent state
   const [persona, setPersona] = useState('');
 
+  // System state
+  const [emailNotifications, setEmailNotifications] = useState(false);
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -69,11 +72,12 @@ export function SettingsPage() {
         setName(currentUser.displayName || '');
         setImagePreview(currentUser.photoURL || null);
         
-        // Fetch and set persona info
+        // Fetch and set other user data from Firestore
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
             setPersona(userDoc.data().persona || '');
+            setEmailNotifications(userDoc.data().emailNotifications || false);
         }
 
       }
@@ -168,6 +172,19 @@ export function SettingsPage() {
         toast({ title: 'Error', description: result.error, variant: 'destructive' });
     }
     setIsSaving(false);
+  };
+
+  const handleNotificationsChange = async (checked: boolean) => {
+    if (!user) return;
+    setEmailNotifications(checked);
+    const result = await updateUserPreferences(user.uid, { emailNotifications: checked });
+    if (result.success) {
+      toast({ title: 'Preferences Saved' });
+    } else {
+      // Revert on failure
+      setEmailNotifications(!checked);
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+    }
   };
 
 
@@ -362,7 +379,10 @@ export function SettingsPage() {
                             <h3 className="font-semibold">Email Notifications</h3>
                             <p className="text-sm text-muted-foreground">Receive notifications about new features and updates.</p>
                         </div>
-                        <Switch disabled />
+                        <Switch
+                          checked={emailNotifications}
+                          onCheckedChange={handleNotificationsChange}
+                        />
                     </div>
                 </CardContent>
                  <CardFooter className="justify-start">

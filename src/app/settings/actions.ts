@@ -60,6 +60,19 @@ export async function updateUserPersona(userId: string, persona: string) {
     }
 }
 
+export async function updateUserPreferences(userId: string, preferences: { emailNotifications: boolean }) {
+    if (!db || !userId) {
+        return { success: false, error: 'User or database not available.' };
+    }
+    try {
+        const userDocRef = doc(db, 'users', userId);
+        await updateDoc(userDocRef, preferences);
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
 export async function clearAllConversations(userId: string) {
     if (!db || !userId) {
         return { success: false, error: 'User or database not available.' };
