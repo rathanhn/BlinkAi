@@ -303,12 +303,14 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             <span>Feedback</span>
                           </Link>
                         </DropdownMenuItem>
-                       <DropdownMenuItem asChild>
-                          <Link href="/admin/feedback">
-                            <Shield className="mr-2 h-4 w-4" />
-                            <span>Admin</span>
-                          </Link>
+                       {userProfile?.isAdmin && (
+                        <DropdownMenuItem asChild>
+                            <Link href="/admin/feedback">
+                                <Shield className="mr-2 h-4 w-4" />
+                                <span>Admin</span>
+                            </Link>
                         </DropdownMenuItem>
+                       )}
                        <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />
@@ -413,12 +415,14 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                             <span>Feedback</span>
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href="/admin/feedback">
-                            <Shield className="mr-2 h-4 w-4" />
-                            <span>Admin</span>
-                          </Link>
-                        </DropdownMenuItem>
+                        {userProfile?.isAdmin && (
+                            <DropdownMenuItem asChild>
+                                <Link href="/admin/feedback">
+                                    <Shield className="mr-2 h-4 w-4" />
+                                    <span>Admin</span>
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
                        <DropdownMenuSeparator />
                        <DropdownMenuItem onClick={handleLogout}>
                          <LogOut className="mr-2 h-4 w-4" />

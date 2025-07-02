@@ -2,25 +2,36 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only read/write their own user document
+    
+    // USERS
+    // Users can read their own profile.
+    // Users can update their own profile (name, photo, persona, etc.).
+    // No one can create or delete user profiles from the client.
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      allow read, update: if request.auth.uid == userId;
+      allow create, delete: if false;
     }
 
-    // Users can manage their own conversations
+    // CONVERSATIONS
+    // A user can only access conversations that belong to them.
     match /conversations/{conversationId} {
-      allow read, write, delete: if request.auth.uid == resource.data.userId;
-    
-      // Users can manage messages within their own conversations
+      allow read, create, update, delete: if request.auth.uid == resource.data.userId;
+
+      // MESSAGES
+      // A user can only access messages within a conversation that belongs to them.
       match /messages/{messageId} {
-        allow read, write, delete: if get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
+        allow read, create, update, delete: if get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid;
       }
     }
 
-    // Feedback can be created by any authenticated user.
-    // All feedback can be read by any authenticated user (for the admin panel).
+    // FEEDBACK
+    // Any authenticated user can create (submit) feedback.
+    // ONLY admin users can read the feedback collection.
+    // No one can update or delete feedback from the client.
     match /feedback/{feedbackId} {
-      allow read, create: if request.auth != null;
+        allow create: if request.auth != null;
+        allow read: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+        allow update, delete: if false;
     }
   }
 }

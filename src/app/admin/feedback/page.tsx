@@ -1,6 +1,6 @@
 'use client';
 
-import { getAllFeedback, type Feedback } from '@/lib/chat-service';
+import { getAllFeedback, type Feedback, getUserProfile } from '@/lib/chat-service';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -42,9 +42,21 @@ export default function FeedbackDashboardPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        
+        const profile = await getUserProfile(currentUser.uid);
+        if (!profile?.isAdmin) {
+          toast({
+            title: 'Access Denied',
+            description: 'You do not have permission to view this page.',
+            variant: 'destructive',
+          });
+          router.push('/chat');
+          return;
+        }
+
         getAllFeedback()
           .then(setFeedbackItems)
           .catch(err => {

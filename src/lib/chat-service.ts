@@ -44,6 +44,7 @@ export interface UserProfile {
     photoURL?: string;
     persona?: string;
     emailNotifications?: boolean;
+    isAdmin?: boolean;
 }
 
 export type FeedbackType = 'bug' | 'feature' | 'general';
