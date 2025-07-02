@@ -174,6 +174,8 @@ export async function deleteConversation(conversationId: string) {
     const conversationRef = doc(db, 'conversations', conversationId);
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
 
+    // For large conversations, this client-side delete could be slow. A batched delete 
+    // in a Cloud Function would be more robust for production environments.
     const messagesSnapshot = await getDocs(messagesRef);
     const batch = writeBatch(db);
     messagesSnapshot.docs.forEach(doc => {
