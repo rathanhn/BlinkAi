@@ -1,4 +1,6 @@
-import { getAllFeedback } from '@/lib/chat-service';
+'use client';
+
+import { getAllFeedback, type Feedback } from '@/lib/chat-service';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -18,16 +20,48 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ShieldAlert } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@/components/ui/tooltip";
+import { useEffect, useState } from 'react';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
-export default async function FeedbackDashboardPage() {
-  const feedbackItems = await getAllFeedback();
+export default function FeedbackDashboardPage() {
+  const [feedbackItems, setFeedbackItems] = useState<Feedback[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const router = useRouter();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        getAllFeedback()
+          .then(setFeedbackItems)
+          .catch(err => {
+            console.error(err);
+            toast({
+              title: 'Error Fetching Feedback',
+              description: 'Could not load feedback. Please check console for details.',
+              variant: 'destructive',
+            })
+          })
+          .finally(() => setLoading(false));
+      } else {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router, toast]);
 
   const getPriorityVariant = (priority: string) => {
     switch (priority.toLowerCase()) {
@@ -41,9 +75,23 @@ export default async function FeedbackDashboardPage() {
         return 'outline';
     }
   };
+  
+  const renderSkeleton = () => (
+    <TableBody>
+      {[...Array(5)].map((_, i) => (
+        <TableRow key={i}>
+          <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-[250px]" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-[70px]" /></TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  );
 
-  return (
-    <div className="flex min-h-screen items-start justify-center bg-background p-4 pt-10 md:pt-4">
+  const PageCard = ({ children }: { children: React.ReactNode }) => (
+     <div className="flex min-h-screen items-start justify-center bg-background p-4 pt-10 md:pt-4">
       <Card className="w-full max-w-4xl">
         <CardHeader>
           <CardTitle>Feedback & Reports</CardTitle>
@@ -51,6 +99,44 @@ export default async function FeedbackDashboardPage() {
             Here are the latest submissions from your users, analyzed by AI.
           </CardDescription>
         </CardHeader>
+        {children}
+        <CardFooter>
+            <Button variant="link" asChild className="p-0">
+                <Link href="/chat">
+                    <ChevronLeft className="w-4 h-4 mr-2" />
+                    Back to Chat
+                </Link>
+            </Button>
+        </CardFooter>
+      </Card>
+    </div>
+  )
+
+  if (loading) {
+     return (
+        <PageCard>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Summary (AI)</TableHead>
+                      <TableHead>Category (AI)</TableHead>
+                      <TableHead>Priority (AI)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  {renderSkeleton()}
+                </Table>
+              </div>
+            </CardContent>
+        </PageCard>
+     );
+  }
+
+  return (
+    <PageCard>
         <CardContent>
           <div className="rounded-md border">
             <Table>
@@ -99,7 +185,11 @@ export default async function FeedbackDashboardPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
-                      No feedback submitted yet.
+                       <div className="flex flex-col items-center gap-2">
+                         <ShieldAlert className="w-8 h-8 text-muted-foreground" />
+                         <p className="font-medium">No feedback submitted yet.</p>
+                         <p className="text-sm text-muted-foreground">When users submit feedback, it will appear here.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -107,15 +197,6 @@ export default async function FeedbackDashboardPage() {
             </Table>
           </div>
         </CardContent>
-        <CardFooter>
-            <Button variant="link" asChild className="p-0">
-                <Link href="/chat">
-                    <ChevronLeft className="w-4 h-4 mr-2" />
-                    Back to Chat
-                </Link>
-            </Button>
-        </CardFooter>
-      </Card>
-    </div>
+    </PageCard>
   );
 }
