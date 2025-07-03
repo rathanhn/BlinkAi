@@ -469,7 +469,6 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                 )}
             </header>
             <div className="relative flex-1 flex flex-col overflow-hidden">
-                <main className='flex-1 flex flex-col overflow-hidden'>
                 {user && userProfile ? (
                   <Chat 
                     key={conversationId || 'welcome'}
@@ -487,8 +486,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                     <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
                   </div>
                 )}
-                </main>
-
+                
                 <AnimatePresence>
                     {isTempChatActive && user && userProfile && (
                         <motion.div

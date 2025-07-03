@@ -253,15 +253,15 @@ export function Chat({
       )}>
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-6 space-y-6">
-            {messages.length === 0 && (
+            {messages.length === 0 && !isPending && (
                 <div className="flex flex-col items-center justify-center h-full text-center p-8">
                     <Logo className="w-20 h-20 text-primary mb-4" />
                     <h2 className="text-2xl font-semibold">
-                        {isTempChat ? "Temporary Chat" : "Send a message"}
+                        {isTempChat ? "Temporary Chat" : "How can I help you today?"}
                     </h2>
                     <p className="text-muted-foreground max-w-sm mx-auto">
                         {isTempChat 
-                            ? "Messages in this chat are not saved and will be lost. Toggle off to return to your saved conversations."
+                            ? "Messages in this chat are not saved and will be lost when you close this overlay."
                             : "Your conversation will be saved automatically."}
                     </p>
                 </div>
@@ -300,7 +300,7 @@ export function Chat({
                         "rounded-lg shadow-sm text-left w-full",
                         message.role === "user"
                           ? "bg-gradient-to-br from-primary to-blue-500 text-primary-foreground p-3"
-                          : "bg-card",
+                          : "bg-card p-3",
                         message.replyTo && getReplyingToMessage(message.replyTo) && "rounded-t-none"
                       )}
                     >
@@ -354,6 +354,7 @@ export function Chat({
                 variant="outline"
                 className="h-auto whitespace-normal text-left justify-start p-3"
                 onClick={() => handleSuggestionClick(suggestion.message)}
+                disabled={isPending}
               >
                 <div className="flex flex-col">
                     <p className="font-semibold">{suggestion.heading}</p>
