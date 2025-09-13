@@ -14,8 +14,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'BlinkAi',
   description: 'An intelligent AI chat assistant.',
+  manifest: '/manifest.json',
   icons: {
     icon: '/logo.svg',
+    shortcut: '/logo.svg',
+    apple: '/logo.svg',
   },
 };
 
