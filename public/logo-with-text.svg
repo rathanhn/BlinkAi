@@ -1,0 +1,7 @@
+<svg width="125" height="32" viewBox="0 0 125 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g fill="currentColor">
+        <path d="M4.66663 9.33333C7.33329 6 11.3333 4 16 4C20.6666 4 24.6666 6 27.3333 9.33333" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4.66663 22.6667C7.33329 26 11.3333 28 16 28C20.6666 28 24.6666 26 27.3333 22.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="36" y="23" font-family="sans-serif" font-size="20" font-weight="bold" fill="currentColor">BlinkAi</text>
+    </g>
+</svg>
