@@ -14,6 +14,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'BlinkAi',
   description: 'An intelligent AI chat assistant.',
+  icons: {
+    icon: '/logo.svg',
+  },
 };
 
 export default function RootLayout({
