@@ -318,8 +318,8 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
     <SidebarProvider>
     <TooltipProvider>
       <div className="flex min-h-screen w-full bg-background text-foreground">
-        <Sidebar>
-          <SidebarHeader>
+ <Sidebar className="flex flex-col">
+ <SidebarHeader className="sticky top-0 z-10 bg-background">
              <div className="flex items-center justify-between p-2">
               <Link href="/" className="flex items-center gap-2">
                 <Logo className="w-8 h-8 text-primary" />
@@ -370,7 +370,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
               </div>
             </div>
           </SidebarHeader>
-          <SidebarContent>
+ <SidebarContent className="flex-1 overflow-y-auto">
             <SidebarMenu>
               <SidebarMenuItem>
                 <div className="flex flex-col gap-2 p-2">
@@ -422,9 +422,9 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
             </SidebarMenu>
           </SidebarContent>
         </Sidebar>
-        <SidebarInset>
+ <SidebarInset className="flex flex-col h-screen">
             <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-card px-4 md:hidden">
-                <SidebarTrigger />
+ <SidebarTrigger />
                  <div className="flex-1" />
                 {user && (
                    <DropdownMenu>
@@ -468,7 +468,7 @@ export function ChatLayout({ conversationId }: { conversationId?: string }) {
                   </DropdownMenu>
                 )}
             </header>
-            <div className="relative flex-1 flex flex-col overflow-hidden">
+ <div className="relative flex-1 flex flex-col overflow-y-auto">
                 {user && userProfile ? (
                   <Chat 
                     key={conversationId || 'welcome'}
